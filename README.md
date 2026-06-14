@@ -128,14 +128,19 @@ feature/pipeline-*   → Master Agent
 
 Każdy agent pracuje na własnym branchu i otwiera Pull Request do `main`.
 
-## CLI (planowane komendy)
+## CLI
 
 ```bash
 python -m job_search.cli init-db
-python -m job_search.cli scrape --source justjoin --sector data
+python -m job_search.cli scrape --sector data
+python -m job_search.cli scrape --sector data --source justjoin
+python -m job_search.cli scrape --sector automation --source pracuj_pl
+python -m job_search.cli scrape --sector data --sync-vectors
 python -m job_search.cli match --profile config/profiles/default.json
 python -m job_search.cli run --sector automation
 ```
+
+Portale: `justjoin`, `pracuj_pl`, `nofluffjobs` (domyślnie wszystkie naraz).
 
 ## Zmienne środowiskowe
 

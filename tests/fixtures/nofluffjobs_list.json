@@ -1,0 +1,13 @@
+{
+  "postings": [
+    {
+      "id": "data-engineer-acme-warsaw",
+      "name": "Acme Corp",
+      "title": "Data Engineer",
+      "location": {
+        "fullyRemote": false,
+        "places": [{"city": "Warszawa"}]
+      }
+    }
+  ]
+}
