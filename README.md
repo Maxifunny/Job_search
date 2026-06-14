@@ -56,8 +56,11 @@ pip install -r requirements.txt
 ### 2. Konfiguracja
 
 ```bash
+# Domyślna (OpenAI) lub Gemini (Google AI Studio, free tier):
 cp .env.example .env
-# Uzupełnij LLM_API_KEY jeśli testujesz moduł matching
+# cp .env.gemini.example .env
+
+# Gemini: klucz z https://aistudio.google.com/apikey → LLM_API_KEY w .env
 ```
 
 ### 3. Inicjalizacja bazy danych
@@ -145,7 +148,7 @@ python -m job_search.cli run --sector automation
 | `MIN_SEMANTIC_SCORE` | `0.65` | Próg podobieństwa semantycznego |
 | `MIN_LLM_CONFIDENCE` | `0.70` | Próg pewności LLM |
 
-Pełna lista: [.env.example](.env.example)
+Pełna lista: [.env.example](.env.example) · Gemini: [.env.gemini.example](.env.gemini.example)
 
 ## Status projektu
 
