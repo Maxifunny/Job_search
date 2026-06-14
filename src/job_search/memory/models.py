@@ -174,3 +174,20 @@ class UserPreference(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class EmbeddingCache(Base):
+    """Cache of text embeddings to reduce OpenAI API calls."""
+
+    __tablename__ = "embedding_cache"
+    __table_args__ = (
+        UniqueConstraint("text_hash", "model", name="uq_embedding_cache_text_model"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    text_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    embedding_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

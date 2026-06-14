@@ -2,7 +2,7 @@
 
 import pytest
 
-from job_search.memory.database import create_db_engine, init_database
+from job_search.memory.database import create_db_engine
 from job_search.memory.models import Base
 
 
