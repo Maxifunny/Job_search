@@ -14,7 +14,8 @@ dependencies = []
 job-search = "job_search.cli:main"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["src", "."]
+include = ["config*", "job_search*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

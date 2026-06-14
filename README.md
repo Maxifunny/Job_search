@@ -49,8 +49,9 @@ Job_search/
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate          # Windows PowerShell: .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+pip install -e .                   # wymagane — rejestruje moduły config i job_search
 ```
 
 ### 2. Konfiguracja
@@ -67,7 +68,7 @@ cp .env.example .env
 
 ```bash
 python scripts/init_db.py
-# lub
+# lub (po pip install -e .):
 python -m job_search.cli init-db
 ```
 

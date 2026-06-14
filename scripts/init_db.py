@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Initialize relational database and ChromaDB directories."""
 
+import sys
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path[:0] = [str(ROOT / "src"), str(ROOT)]
 
 from config.settings import get_settings
 from job_search.memory.database import init_database
