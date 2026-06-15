@@ -1,0 +1,22 @@
+{
+  "name": "default",
+  "target_sectors": ["data", "automation"],
+  "target_roles": [
+    "Data Engineer",
+    "Data Analyst",
+    "Programista PLC",
+    "Automatyk"
+  ],
+  "skills": [
+    {"name": "Python", "years": 3},
+    {"name": "SQL", "years": 4},
+    {"name": "TIA Portal", "years": 2},
+    {"name": "Pandas", "years": 2}
+  ],
+  "excluded_keywords": [
+    "data entry",
+    "wprowadzanie danych",
+    "staż bez wynagrodzenia"
+  ],
+  "cv_text": "Specjalista z doświadczeniem w analityce danych (Python, SQL, Pandas) oraz automatyce przemysłowej (TIA Portal, PLC). Szukam ról łączących data engineering z projektami automatyki."
+}
