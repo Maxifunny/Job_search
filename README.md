@@ -115,7 +115,7 @@ Profil kandydata → Matching (filter → semantic → LLM)
 | Repo/Data Agent | `memory/` | [docs/agents/repo-data-agent.md](docs/agents/repo-data-agent.md) |
 | Scraper Agent | `scrapers/` | [docs/agents/scraper-agent.md](docs/agents/scraper-agent.md) |
 | Matching Agent | `matching/` | [docs/agents/matching-agent.md](docs/agents/matching-agent.md) |
-| Master Agent | `orchestrator/` | Integracja pipeline (Krok 2) |
+| Master Agent | `orchestrator/` | [docs/agents/pipeline-agent.md](docs/agents/pipeline-agent.md) |
 
 ### Konwencje Git
 
@@ -137,10 +137,52 @@ python -m job_search.cli scrape --sector data --source justjoin
 python -m job_search.cli scrape --sector automation --source pracuj_pl
 python -m job_search.cli scrape --sector data --sync-vectors
 python -m job_search.cli match --profile config/profiles/default.json
-python -m job_search.cli run --sector automation
 ```
 
 Portale: `justjoin`, `pracuj_pl`, `nofluffjobs` (domyślnie wszystkie naraz).
+
+### Pełny pipeline — `run`
+
+Jedna komenda uruchamia cały przepływ **SCRAPE → STORE → MATCH → RECOMMEND**:
+
+```bash
+# Pełny pipeline — sektor Data
+python -m job_search.cli run --sector data --profile config/profiles/default.json
+
+# Szybki test (5 ofert na portal, 5 ocen LLM — oszczędność API)
+python -m job_search.cli run --sector data --max-offers 5 --match-limit 5
+
+# Tylko JustJoin, sektor Automatyka
+python -m job_search.cli run --sector automation --source justjoin
+
+# Windows Task Scheduler — codziennie o 8:00
+# Program: python   Args: -m job_search.cli run --sector data --max-offers 30 --match-limit 20
+```
+
+| Argument | Opis |
+|----------|------|
+| `--sector {data,automation}` | wymagany |
+| `--profile PATH` | domyślnie `config/profiles/default.json` |
+| `--source {justjoin,pracuj_pl,nofluffjobs}` | opcjonalny (domyślnie wszystkie portale) |
+| `--max-offers INT` | limit scrapowania per portal |
+| `--max-pages INT` | limit stron per portal |
+| `--match-limit INT` | limit ofert do oceny LLM (oszczędność API) |
+| `--no-sync-vectors` | pomiń ChromaDB przy scrape (tylko debug) |
+
+Przykładowy output:
+
+```
+[pipeline] Krok 1/3: Scrapowanie ofert...
+[justjoin] found=10 new=8 updated=2
+[pipeline] Krok 2/3: Dopasowywanie ofert do profilu...
+[data] evaluated=10 accepted=3 rejected=6 skipped=1
+[pipeline] Krok 3/3: Gotowe.
+
+=== REKOMENDACJE (3) ===
+✅ Data Engineer @ Acme Corp — https://justjoin.it/offers/...
+✅ Senior Data Analyst @ DataWorks — https://justjoin.it/offers/...
+✅ ML Engineer @ NeoML — https://justjoin.it/offers/...
+```
 
 ## Zmienne środowiskowe
 
@@ -160,10 +202,10 @@ Pełna lista: [.env.example](.env.example) · Gemini: [.env.gemini.example](.env
 | Moduł | Status |
 |-------|--------|
 | Architektura + schemat DB | ✅ Krok 1 |
-| Memory (implementacja) | 🔲 Krok 2 — Repo/Data Agent |
-| Scrapers | 🔲 Krok 2 — Scraper Agent |
-| Matching (LLM) | 🔲 Krok 2 — Matching Agent |
-| Pipeline orchestrator | 🔲 Krok 3 — Master Agent |
+| Memory (implementacja) | ✅ Repo/Data Agent |
+| Scrapers | ✅ Scraper Agent |
+| Matching (LLM) | ✅ Matching Agent |
+| Pipeline orchestrator | ✅ Master Agent (komenda `run`) |
 
 ## Licencja
 

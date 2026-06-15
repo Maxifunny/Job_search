@@ -1,5 +1,5 @@
 """Pipeline orchestration."""
 
-from job_search.orchestrator.pipeline import JobSearchPipeline
+from job_search.orchestrator.pipeline import JobSearchPipeline, PipelineResult
 
-__all__ = ["JobSearchPipeline"]
+__all__ = ["JobSearchPipeline", "PipelineResult"]

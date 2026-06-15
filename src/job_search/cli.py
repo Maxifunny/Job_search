@@ -5,8 +5,9 @@ from pathlib import Path
 
 from job_search.matching.service import load_profile, match_pending_offers
 from job_search.memory.database import init_database
-from job_search.scrapers import list_sources, scrape_and_persist
+from job_search.orchestrator import JobSearchPipeline
 from job_search.schemas.job_offer import JobSector
+from job_search.scrapers import list_sources, scrape_and_persist
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -50,7 +51,45 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum number of offers to evaluate",
     )
 
-    sub.add_parser("run", help="Full pipeline: scrape → match → recommend")
+    run = sub.add_parser("run", help="Full pipeline: scrape → store → match → recommend")
+    run.add_argument(
+        "--sector",
+        choices=[sector.value for sector in JobSector],
+        required=True,
+        help="Target sector: data or automation",
+    )
+    run.add_argument(
+        "--profile",
+        default="config/profiles/default.json",
+        help="Path to candidate profile JSON (default: config/profiles/default.json)",
+    )
+    run.add_argument(
+        "--source",
+        choices=list_sources(),
+        help="Optional single portal source (default: all configured portals)",
+    )
+    run.add_argument(
+        "--max-offers",
+        type=int,
+        help="Limit offers scraped per portal",
+    )
+    run.add_argument(
+        "--max-pages",
+        type=int,
+        help="Limit number of pages scraped per portal",
+    )
+    run.add_argument(
+        "--match-limit",
+        type=int,
+        help="Limit number of offers evaluated by the LLM (saves API quota)",
+    )
+    run.add_argument(
+        "--no-sync-vectors",
+        dest="sync_vectors",
+        action="store_false",
+        help="Skip ChromaDB embeddings during scrape (debug only)",
+    )
+    run.set_defaults(sync_vectors=True)
 
     return parser
 
@@ -94,7 +133,38 @@ def main() -> None:
                 f"→ {outcome.offer.url}"
             )
     elif args.command == "run":
-        print(f"Command '{args.command}' is not yet implemented.")
+        sector = JobSector(args.sector)
+        profile = load_profile(Path(args.profile))
+        pipeline = JobSearchPipeline()
+        try:
+            result = pipeline.run(
+                sector,
+                profile,
+                source=args.source,
+                sync_vectors=args.sync_vectors,
+                max_offers=args.max_offers,
+                max_pages=args.max_pages,
+                match_limit=args.match_limit,
+            )
+        except KeyboardInterrupt:
+            print("\n[pipeline] Przerwano pipeline.")
+            return
+
+        print(f"\n=== REKOMENDACJE ({len(result.recommendations)}) ===")
+        if result.recommendations:
+            for recommendation in result.recommendations:
+                print(f"✅ {recommendation}")
+        else:
+            print("Brak nowych rekomendacji dla tego profilu.")
+
+        if result.scrape_errors:
+            print(f"\n[pipeline] Błędy scrapera ({len(result.scrape_errors)}):")
+            for error in result.scrape_errors:
+                print(f"  - {error}")
+        if result.errors:
+            print(f"\n[pipeline] Błędy ({len(result.errors)}):")
+            for error in result.errors:
+                print(f"  - {error}")
     else:
         parser.print_help()
 
