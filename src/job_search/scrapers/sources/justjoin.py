@@ -112,10 +112,9 @@ class JustJoinScraper(BaseScraper):
         detail = self.http.get_json(f"{self.settings.justjoin_api_base}/offers/{slug}")
         description = html_to_text(detail.get("body"))
         requirements = html_to_text(detail.get("requirements")) or None
-        skills = [
-            skill.get("label", skill) if isinstance(skill, dict) else str(skill)
-            for skill in detail.get("requiredSkills", [])
-        ]
+        skills = _normalize_skills(
+            detail.get("requiredSkills", []) + detail.get("niceToHaveSkills", [])
+        )
         salary_min, salary_max, currency = _extract_salary(detail.get("employmentTypes", []))
         workplace = detail.get("workplaceType") or item.get("workplaceType")
         posted_at = _parse_datetime(item.get("publishedAt") or detail.get("publishedAt"))
@@ -139,6 +138,29 @@ class JustJoinScraper(BaseScraper):
             posted_at=posted_at,
             raw_payload={"list_item": item, "detail": detail, "query": query},
         )
+
+
+def _normalize_skills(raw_skills: list[Any]) -> list[str]:
+    """Map JustJoin skill objects to plain string names."""
+    skills: list[str] = []
+    seen: set[str] = set()
+
+    for skill in raw_skills:
+        name: str | None = None
+        if isinstance(skill, str):
+            name = skill.strip()
+        elif isinstance(skill, dict):
+            for key in ("label", "name", "skill", "title"):
+                value = skill.get(key)
+                if value:
+                    name = str(value).strip()
+                    break
+
+        if name and name not in seen:
+            seen.add(name)
+            skills.append(name)
+
+    return skills
 
 
 def _extract_salary(employment_types: list[dict[str, Any]]) -> tuple[float | None, float | None, str | None]:
