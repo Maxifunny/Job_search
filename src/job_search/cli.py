@@ -111,6 +111,60 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.set_defaults(sync_vectors=True)
 
+    schedule = sub.add_parser(
+        "schedule",
+        help="Print PowerShell commands to register a Windows Scheduled Task (documentation helper)",
+    )
+    schedule.add_argument(
+        "--sector",
+        default="data",
+        help="Sector slug passed to run_job_search.ps1 (default: data)",
+    )
+    schedule.add_argument(
+        "--profile",
+        default="config/profiles/default.json",
+        help="Profile path (default: config/profiles/default.json)",
+    )
+    schedule.add_argument(
+        "--source",
+        default="justjoin",
+        help="Portal source (default: justjoin)",
+    )
+    schedule.add_argument(
+        "--max-offers",
+        type=int,
+        default=30,
+        help="Max offers per portal (default: 30)",
+    )
+    schedule.add_argument(
+        "--match-limit",
+        type=int,
+        default=20,
+        help="LLM evaluation limit (default: 20)",
+    )
+    schedule.add_argument(
+        "--sync-vectors",
+        action="store_true",
+        help="Include -SyncVectors in the registration command",
+    )
+    schedule.add_argument(
+        "--task-name",
+        default="JobSearch-Daily",
+        help="Windows task name (default: JobSearch-Daily)",
+    )
+    schedule.add_argument(
+        "--hour",
+        type=int,
+        default=8,
+        help="Daily trigger hour (default: 8)",
+    )
+    schedule.add_argument(
+        "--minute",
+        type=int,
+        default=0,
+        help="Daily trigger minute (default: 0)",
+    )
+
     return parser
 
 
@@ -190,6 +244,32 @@ def main() -> None:
             print(f"\n[pipeline] Błędy ({len(result.errors)}):")
             for error in result.errors:
                 print(f"  - {error}")
+    elif args.command == "schedule":
+        profile = args.profile.replace("/", "\\")
+        sync_flag = " -SyncVectors" if args.sync_vectors else ""
+        print("# Windows Task Scheduler — skopiuj do PowerShell (jako Administrator)\n")
+        print("cd <ścieżka-do-repozytorium-Job_search>")
+        print(
+            f".\\scripts\\windows\\register_scheduled_task.ps1 "
+            f"-TaskName {args.task_name} "
+            f"-Sector {args.sector} "
+            f"-Profile {profile} "
+            f"-Source {args.source} "
+            f"-MaxOffers {args.max_offers} "
+            f"-MatchLimit {args.match_limit} "
+            f"-Hour {args.hour} -Minute {args.minute}"
+            f"{sync_flag}"
+        )
+        print("\n# Ręczny test (bez harmonogramu):")
+        print(
+            f".\\scripts\\windows\\run_job_search.ps1 "
+            f"-Sector {args.sector} -Profile {profile} "
+            f"-Source {args.source} -MaxOffers {args.max_offers} "
+            f"-MatchLimit {args.match_limit}"
+            f"{sync_flag}"
+        )
+        print("\n# Odinstalowanie:")
+        print(f".\\scripts\\windows\\register_scheduled_task.ps1 -Unregister -TaskName {args.task_name}")
     else:
         parser.print_help()
 
