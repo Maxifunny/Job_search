@@ -1,0 +1,20 @@
+{
+  "name": "backend_dev",
+  "target_sectors": ["example"],
+  "target_roles": [
+    "Backend Developer",
+    "Python Developer",
+    "API Developer"
+  ],
+  "skills": [
+    {"name": "Python", "years": 4},
+    {"name": "FastAPI", "years": 2},
+    {"name": "Django", "years": 2},
+    {"name": "PostgreSQL", "years": 3}
+  ],
+  "excluded_keywords": [
+    "frontend only",
+    "staż bez wynagrodzenia"
+  ],
+  "cv_text": "Backend developer with experience building REST APIs in Python (FastAPI, Django) and PostgreSQL. Looking for backend or full-stack roles with a Python focus."
+}

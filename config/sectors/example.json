@@ -1,0 +1,24 @@
+{
+  "id": "example",
+  "display_name": "Backend Developer (example template)",
+  "portal_queries": {
+    "justjoin": ["python", "backend"],
+    "pracuj_pl": ["backend developer", "python developer"],
+    "nofluffjobs": ["backend", "python"],
+    "linkedin": ["backend developer", "python developer"]
+  },
+  "false_positive_title_keywords": [
+    "frontend",
+    "graphic designer",
+    "ui designer"
+  ],
+  "required_skill_keywords": [
+    "python",
+    "django",
+    "fastapi",
+    "flask",
+    "backend",
+    "api",
+    "rest"
+  ]
+}

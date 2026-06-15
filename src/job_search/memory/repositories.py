@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session
 from job_search.memory.embeddings import EmbeddingService, build_offer_document
 from job_search.memory.models import (
     JobOffer,
-    JobSectorEnum,
     MatchDecisionEnum,
     MatchResult,
     Recommendation,
@@ -98,7 +97,7 @@ class JobOfferRepository:
             title=offer.title,
             company=offer.company,
             location=offer.location,
-            sector=JobSectorEnum(offer.sector.value),
+            sector=offer.sector,
             description=offer.description,
             requirements=offer.requirements,
             skills_json=json.dumps(offer.skills, ensure_ascii=False),
@@ -131,7 +130,7 @@ class JobOfferRepository:
             document=document,
             metadata={
                 "source": entity.source,
-                "sector": entity.sector.value,
+                "sector": entity.sector,
                 "company": entity.company,
                 "title": entity.title,
             },
@@ -150,10 +149,9 @@ class JobOfferRepository:
     def get_unmatched_offers(
         self,
         candidate_name: str,
-        sector: JobSectorEnum | str,
+        sector: str,
     ) -> list[JobOffer]:
         """Return active offers without a match result for the given candidate."""
-        sector_value = sector.value if isinstance(sector, JobSectorEnum) else sector
         matched_ids = (
             select(MatchResult.job_offer_id)
             .where(MatchResult.candidate_name == candidate_name)
@@ -162,7 +160,7 @@ class JobOfferRepository:
         stmt = (
             select(JobOffer)
             .where(
-                JobOffer.sector == JobSectorEnum(sector_value),
+                JobOffer.sector == sector,
                 JobOffer.is_active.is_(True),
                 JobOffer.id.not_in(matched_ids),
             )
@@ -258,7 +256,7 @@ class ScrapeRunRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def start_run(self, source: str, sector: JobSectorEnum) -> ScrapeRun:
+    def start_run(self, source: str, sector: str) -> ScrapeRun:
         run = ScrapeRun(source=source, sector=sector, status="running")
         self.session.add(run)
         self.session.flush()

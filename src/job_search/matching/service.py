@@ -14,10 +14,10 @@ from job_search.matching.llm_evaluator import LLMEvaluator
 from job_search.matching.semantic_matcher import SemanticMatcher
 from job_search.memory.database import create_db_engine
 from job_search.memory.embeddings import EmbeddingService
-from job_search.memory.models import JobOffer, JobSectorEnum, MatchDecisionEnum
+from job_search.memory.models import JobOffer, MatchDecisionEnum
 from job_search.memory.repositories import JobOfferRepository, MatchResultRepository
 from job_search.schemas.candidate import CandidateProfile
-from job_search.schemas.job_offer import JobOfferCreate, JobSector
+from job_search.schemas.job_offer import JobOfferCreate, JobSector, coerce_sector_id
 
 
 @dataclass
@@ -44,7 +44,7 @@ def offer_orm_to_schema(offer: JobOffer) -> JobOfferCreate:
         title=offer.title,
         company=offer.company,
         location=offer.location,
-        sector=JobSector(offer.sector.value),
+        sector=offer.sector,
         description=offer.description,
         requirements=offer.requirements,
         skills=skills,
@@ -87,16 +87,15 @@ def match_pending_offers(
         )
 
         sectors = (
-            [JobSector(sector)]
+            [coerce_sector_id(sector)]
             if sector is not None
-            else [JobSector(value) for value in profile.target_sectors]
+            else list(profile.target_sectors)
         )
 
         offers: list[JobOffer] = []
         for target_sector in sectors:
-            sector_enum = JobSectorEnum(target_sector.value)
             offers.extend(
-                offer_repo.get_unmatched_offers(profile.name, sector_enum)
+                offer_repo.get_unmatched_offers(profile.name, target_sector)
             )
 
         if limit is not None:

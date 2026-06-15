@@ -7,18 +7,17 @@ from dataclasses import dataclass, field
 from config.settings import get_settings
 from job_search.memory.database import get_session
 from job_search.memory.embeddings import EmbeddingService
-from job_search.memory.models import JobSectorEnum
 from job_search.memory.repositories import JobOfferRepository, ScrapeRunRepository
 from job_search.memory.vector_store import VectorMemory
 from job_search.scrapers.base import ScraperResult
 from job_search.scrapers.registry import run_all_scrapers, run_scraper
-from job_search.schemas.job_offer import JobSector
+from job_search.schemas.job_offer import JobSector, coerce_sector_id
 
 
 @dataclass
 class ScrapeSummary:
     source: str
-    sector: JobSector
+    sector: str
     offers_found: int = 0
     offers_new: int = 0
     offers_updated: int = 0
@@ -26,13 +25,14 @@ class ScrapeSummary:
 
 
 def scrape_and_persist(
-    sector: JobSector,
+    sector: JobSector | str,
     *,
     source: str | None = None,
     sync_vectors: bool = False,
     **kwargs,
 ) -> list[ScrapeSummary]:
     """Run scraper(s), upsert offers, and record scrape runs."""
+    sector_id = coerce_sector_id(sector)
     results = (
         [run_scraper(source, sector, **kwargs)]
         if source
@@ -52,8 +52,12 @@ def scrape_and_persist(
         scrape_repo = ScrapeRunRepository(session)
 
         for result in results:
-            summary = ScrapeSummary(source=result.source, sector=result.sector, errors=list(result.errors))
-            run = scrape_repo.start_run(result.source, JobSectorEnum(result.sector.value))
+            summary = ScrapeSummary(
+                source=result.source,
+                sector=coerce_sector_id(result.sector),
+                errors=list(result.errors),
+            )
+            run = scrape_repo.start_run(result.source, sector_id)
             status = "success" if not result.errors or result.offers else "partial"
 
             for offer in result.offers:
