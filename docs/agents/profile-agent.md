@@ -47,6 +47,8 @@ Existing databases with enum columns require:
 
 ```bash
 alembic upgrade head
+# lub (zalecane na Windows):
+python -m job_search.cli migrate
 ```
 
 Fresh installs via `init-db` create `String(64)` columns directly. Existing `data` / `automation` row values remain valid.
