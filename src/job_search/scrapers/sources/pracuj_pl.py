@@ -34,10 +34,20 @@ class PracujPlScraper(BaseScraper):
         errors: list[str] = []
         seen_ids: set[str] = set()
         max_pages = kwargs.get("max_pages", self.settings.scraper_max_pages)
+        max_offers = kwargs.get("max_offers")
 
         for q in queries:
+            if max_offers is not None and len(offers) >= max_offers:
+                break
+            remaining = None if max_offers is None else max_offers - len(offers)
             try:
-                fetched = self._fetch_query(q, sector, max_pages=max_pages, seen_ids=seen_ids)
+                fetched = self._fetch_query(
+                    q,
+                    sector,
+                    max_pages=max_pages,
+                    seen_ids=seen_ids,
+                    remaining=remaining,
+                )
                 offers.extend(fetched)
             except Exception as exc:  # noqa: BLE001
                 message = f"Pracuj.pl query '{q}' failed: {exc}"
@@ -65,11 +75,19 @@ class PracujPlScraper(BaseScraper):
         *,
         max_pages: int,
         seen_ids: set[str],
+        remaining: int | None = None,
     ) -> list[JobOfferCreate]:
         offers: list[JobOfferCreate] = []
         encoded = quote(query)
+        limit = self.settings.scraper_max_offers_per_query
+        if remaining is not None:
+            limit = min(limit, remaining)
+        if limit <= 0:
+            return offers
 
         for page in range(1, max_pages + 1):
+            if len(offers) >= limit:
+                break
             search_url = f"{self.settings.pracuj_pl_base_url}/praca/{encoded};kw?pn={page}"
             html = self.http.get_text(search_url)
 
@@ -83,7 +101,9 @@ class PracujPlScraper(BaseScraper):
             if not links:
                 break
 
-            for link in links[: self.settings.scraper_max_offers_per_query]:
+            for link in links[:limit]:
+                if len(offers) >= limit:
+                    break
                 offer_id = link.split(",oferta,")[-1].split("?")[0]
                 if offer_id in seen_ids:
                     continue

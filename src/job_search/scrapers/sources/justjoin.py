@@ -37,10 +37,20 @@ class JustJoinScraper(BaseScraper):
         errors: list[str] = []
         seen_slugs: set[str] = set()
         max_pages = kwargs.get("max_pages", self.settings.scraper_max_pages)
+        max_offers = kwargs.get("max_offers")
 
         for q in queries:
+            if max_offers is not None and len(offers) >= max_offers:
+                break
+            remaining = None if max_offers is None else max_offers - len(offers)
             try:
-                fetched = self._fetch_query(q, sector, max_pages=max_pages, seen_slugs=seen_slugs)
+                fetched = self._fetch_query(
+                    q,
+                    sector,
+                    max_pages=max_pages,
+                    seen_slugs=seen_slugs,
+                    remaining=remaining,
+                )
                 offers.extend(fetched)
             except Exception as exc:  # noqa: BLE001 - collect per-query errors
                 message = f"JustJoin query '{q}' failed: {exc}"
@@ -68,12 +78,20 @@ class JustJoinScraper(BaseScraper):
         *,
         max_pages: int,
         seen_slugs: set[str],
+        remaining: int | None = None,
     ) -> list[JobOfferCreate]:
         offers: list[JobOfferCreate] = []
         cursor = 0
         pages = 0
+        limit = self.settings.scraper_max_offers_per_query
+        if remaining is not None:
+            limit = min(limit, remaining)
+        if limit <= 0:
+            return offers
 
         while pages < max_pages:
+            if len(offers) >= limit:
+                break
             params: dict[str, Any] = {
                 "itemsCount": self.settings.scraper_items_per_page,
                 "from": cursor,
@@ -89,6 +107,8 @@ class JustJoinScraper(BaseScraper):
                 break
 
             for item in batch:
+                if len(offers) >= limit:
+                    break
                 slug = item.get("slug")
                 if not slug or slug in seen_slugs:
                     continue
@@ -97,6 +117,9 @@ class JustJoinScraper(BaseScraper):
                     offers.append(self._map_offer(item, sector, query))
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("justjoin_map_failed", slug=slug, error=str(exc))
+
+            if len(offers) >= limit:
+                break
 
             meta = payload.get("meta", {})
             next_cursor = meta.get("next", {}).get("cursor")
