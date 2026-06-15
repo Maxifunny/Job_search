@@ -74,6 +74,8 @@ def test_justjoin_maps_offer_from_api():
     assert offer.source == "justjoin"
     assert offer.title == "Observability Engineer"
     assert "Python" in offer.skills
+    assert "SQL" in offer.skills
+    assert "Spark" in offer.skills
     assert offer.sector == JobSector.DATA
 
 

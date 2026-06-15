@@ -7,7 +7,11 @@
   "workplaceType": "hybrid",
   "body": "<p>Build observability platforms with Python and SQL.</p>",
   "requirements": "<p>Monitoring, Grafana, Prometheus</p>",
-  "requiredSkills": [{"label": "Python"}, {"label": "SQL"}],
+  "requiredSkills": [
+    {"name": "Python", "level": 3},
+    {"name": "SQL", "level": 4}
+  ],
+  "niceToHaveSkills": [{"label": "Spark"}],
   "employmentTypes": [
     {"from": 12000, "to": 18000, "currency": "PLN", "type": "permanent", "unit": "month", "gross": true}
   ],
