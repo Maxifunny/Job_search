@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from job_search.scrapers.base import BaseScraper, ScraperResult
 from job_search.scrapers.sources.justjoin import JustJoinScraper
+from job_search.scrapers.sources.linkedin import LinkedInScraper
 from job_search.scrapers.sources.nofluffjobs import NoFluffJobsScraper
 from job_search.scrapers.sources.pracuj_pl import PracujPlScraper
 from job_search.schemas.job_offer import JobSector
 
 SCRAPER_REGISTRY: dict[str, type[BaseScraper]] = {
     JustJoinScraper.source_name: JustJoinScraper,
+    LinkedInScraper.source_name: LinkedInScraper,
     PracujPlScraper.source_name: PracujPlScraper,
     NoFluffJobsScraper.source_name: NoFluffJobsScraper,
 }

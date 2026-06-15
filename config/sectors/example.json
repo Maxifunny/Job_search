@@ -5,7 +5,7 @@
     "justjoin": ["python", "backend"],
     "pracuj_pl": ["backend developer", "python developer"],
     "nofluffjobs": ["backend", "python"],
-    "linkedin": []
+    "linkedin": ["backend developer", "python developer"]
   },
   "false_positive_title_keywords": [
     "frontend",

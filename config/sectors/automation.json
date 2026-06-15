@@ -5,7 +5,7 @@
     "justjoin": ["automation", "plc", "scada"],
     "pracuj_pl": ["automatyk", "programista plc", "inżynier automatyki"],
     "nofluffjobs": ["embedded", "automation"],
-    "linkedin": []
+    "linkedin": ["plc programmer", "automation engineer"]
   },
   "false_positive_title_keywords": [
     "operator produkcji",

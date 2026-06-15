@@ -70,6 +70,14 @@ class Settings(BaseSettings):
         default="https://nofluffjobs.com/api",
         alias="NOFLUFFJOBS_API_BASE",
     )
+    linkedin_guest_api_base: str = Field(
+        default="https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search",
+        alias="LINKEDIN_GUEST_API_BASE",
+    )
+    linkedin_jobs_location: str = Field(
+        default="Poland",
+        alias="LINKEDIN_JOBS_LOCATION",
+    )
     scraper_max_pages: int = Field(default=3, alias="SCRAPER_MAX_PAGES")
     scraper_items_per_page: int = Field(default=50, alias="SCRAPER_ITEMS_PER_PAGE")
     scraper_max_offers_per_query: int = Field(

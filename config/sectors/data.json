@@ -5,7 +5,7 @@
     "justjoin": ["data", "analytics"],
     "pracuj_pl": ["data analyst", "data engineer", "data scientist"],
     "nofluffjobs": ["data", "analytics"],
-    "linkedin": []
+    "linkedin": ["data engineer", "data analyst"]
   },
   "false_positive_title_keywords": [
     "data entry",

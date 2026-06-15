@@ -135,12 +135,15 @@ Każdy agent pracuje na własnym branchu i otwiera Pull Request do `main`.
 python -m job_search.cli init-db
 python -m job_search.cli scrape --sector data
 python -m job_search.cli scrape --sector data --source justjoin
+python -m job_search.cli scrape --sector data --source linkedin --max-offers 5
 python -m job_search.cli scrape --sector automation --source pracuj_pl
 python -m job_search.cli scrape --sector data --sync-vectors
 python -m job_search.cli match --profile config/profiles/default.json
 ```
 
-Portale: `justjoin`, `pracuj_pl`, `nofluffjobs` (domyślnie wszystkie naraz).
+Portale: `justjoin`, `pracuj_pl`, `nofluffjobs`, `linkedin` (domyślnie wszystkie naraz).
+
+> **LinkedIn:** używa publicznego guest API (bez logowania). LinkedIn może blokować żądania z IP serwerów (403/429) — w takim przypadku spróbuj z domowego IP lub zmniejsz częstotliwość (`SCRAPER_REQUEST_DELAY_SECONDS`). Opisy ofert pochodzą ze skrótu karty wyszukiwania, nie z pełnej strony ogłoszenia.
 
 ```bash
 python -m job_search.cli list-sectors
@@ -226,7 +229,7 @@ python -m job_search.cli run --sector automation --source justjoin
 |----------|------|
 | `--sector SECTOR` | wymagany — slug z `list-sectors` (np. `data`, `example`) |
 | `--profile PATH` | domyślnie `config/profiles/default.json` |
-| `--source {justjoin,pracuj_pl,nofluffjobs}` | opcjonalny (domyślnie wszystkie portale) |
+| `--source {justjoin,pracuj_pl,nofluffjobs,linkedin}` | opcjonalny (domyślnie wszystkie portale) |
 | `--max-offers INT` | limit scrapowania per portal |
 | `--max-pages INT` | limit stron per portal |
 | `--match-limit INT` | limit ofert do oceny LLM (oszczędność API) |
