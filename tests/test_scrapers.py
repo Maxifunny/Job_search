@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from config.settings import Settings
 from job_search.scrapers.parsers import extract_pracuj_offer_links, parse_pracuj_offer_page
 from job_search.scrapers.registry import list_sources, run_scraper
 from job_search.scrapers.sources.justjoin import JustJoinScraper
@@ -134,3 +135,162 @@ def test_nofluffjobs_maps_offer_from_api():
 def test_run_scraper_unknown_source_raises():
     with pytest.raises(ValueError, match="Unknown scraper source"):
         run_scraper("unknown-portal", JobSector.DATA)
+
+
+# --- max_offers / early-termination fixtures and helpers -------------------
+
+JUSTJOIN_DETAIL = {
+    "body": "<p>Build and operate data pipelines.</p>",
+    "requirements": "<p>SQL, Python</p>",
+    "requiredSkills": [{"name": "Python"}, {"name": "SQL"}],
+    "niceToHaveSkills": [{"name": "Spark"}],
+    "employmentTypes": [
+        {"from": 12000, "to": 18000, "currency": "PLN", "type": "permanent"}
+    ],
+    "workplaceType": "remote",
+}
+
+NOFLUFF_DETAIL = {
+    "title": "Data Engineer",
+    "company": {"name": "Acme Corp"},
+    "specs": {"dailyTasks": ["Build pipelines"]},
+    "requirements": {"skills": [{"name": "Python"}]},
+    "basics": {"technology": "Python"},
+    "salary": {"from": 12000, "to": 18000},
+}
+
+
+def _justjoin_list(count: int):
+    return {
+        "data": [
+            {
+                "guid": f"guid-{i}",
+                "slug": f"data-offer-{i}",
+                "title": f"Data Role {i}",
+                "companyName": "Acme",
+                "city": "Warsaw",
+                "workplaceType": "remote",
+                "publishedAt": "2026-06-14T18:00:02Z",
+            }
+            for i in range(count)
+        ],
+        "meta": {"from": 0, "totalItems": count, "next": {"cursor": None}},
+    }
+
+
+def _nofluff_list(count: int):
+    return {
+        "postings": [
+            {
+                "id": f"job-{i}",
+                "name": "Acme Corp",
+                "title": f"Data Engineer {i}",
+                "location": {"fullyRemote": False, "places": [{"city": "Warszawa"}]},
+            }
+            for i in range(count)
+        ]
+    }
+
+
+class CountingJustJoinHttp:
+    """JustJoin mock that returns a list payload and counts detail requests."""
+
+    def __init__(self, list_payload: dict) -> None:
+        self.list_payload = list_payload
+        self.detail_calls = 0
+
+    def get_json(self, url: str, *, params=None):
+        if url.endswith("/offers"):
+            return self.list_payload
+        self.detail_calls += 1
+        return JUSTJOIN_DETAIL
+
+    def health_check(self, url: str) -> bool:
+        return True
+
+    def close(self) -> None:
+        return None
+
+
+class CountingNoFluffHttp:
+    """NoFluffJobs mock that returns a list payload and counts detail requests."""
+
+    def __init__(self, list_payload: dict) -> None:
+        self.list_payload = list_payload
+        self.detail_calls = 0
+
+    def get_json(self, url: str, *, params=None):
+        if url.endswith("/posting"):
+            return self.list_payload
+        self.detail_calls += 1
+        return NOFLUFF_DETAIL
+
+    def health_check(self, url: str) -> bool:
+        return True
+
+    def close(self) -> None:
+        return None
+
+
+def test_justjoin_max_offers_caps_total_and_limits_detail_calls():
+    http = CountingJustJoinHttp(_justjoin_list(10))
+    scraper = JustJoinScraper(http_client=http)
+
+    result = scraper.fetch_offers(JobSector.DATA, max_offers=3, max_pages=1)
+
+    assert result.errors == []
+    assert len(result.offers) == 3
+    assert http.detail_calls == 3
+
+
+def test_justjoin_default_run_bounded_by_per_query_cap():
+    settings = Settings()
+    settings.scraper_max_offers_per_query = 2
+    http = CountingJustJoinHttp(_justjoin_list(10))
+    scraper = JustJoinScraper(http_client=http, settings=settings)
+
+    result = scraper.fetch_offers(JobSector.DATA, query="data", max_pages=1)
+
+    assert len(result.offers) == 2
+    assert http.detail_calls == 2
+
+
+def test_nofluffjobs_max_offers_caps_total_and_limits_detail_calls():
+    http = CountingNoFluffHttp(_nofluff_list(10))
+    scraper = NoFluffJobsScraper(http_client=http)
+
+    result = scraper.fetch_offers(JobSector.DATA, max_offers=3, max_pages=1)
+
+    assert result.errors == []
+    assert len(result.offers) == 3
+    assert http.detail_calls == 3
+
+
+def test_nofluffjobs_default_run_bounded_by_per_query_cap():
+    settings = Settings()
+    settings.scraper_max_offers_per_query = 2
+    http = CountingNoFluffHttp(_nofluff_list(10))
+    scraper = NoFluffJobsScraper(http_client=http, settings=settings)
+
+    result = scraper.fetch_offers(JobSector.DATA, query="data", max_pages=1)
+
+    assert len(result.offers) == 2
+    assert http.detail_calls == 2
+
+
+def test_pracuj_max_offers_caps_total_and_limits_detail_calls():
+    search_html = _load("pracuj_search.html")
+    offer_html = _load("pracuj_offer.html")
+
+    http = MagicMock()
+    http.get_text.side_effect = [search_html, offer_html, offer_html]
+    http.health_check.return_value = True
+
+    scraper = PracujPlScraper(http_client=http)
+    result = scraper.fetch_offers(
+        JobSector.DATA, query="data engineer", max_pages=1, max_offers=1
+    )
+
+    assert len(result.offers) == 1
+    # One list request + one detail request; the second link is never fetched.
+    assert http.get_text.call_count == 2

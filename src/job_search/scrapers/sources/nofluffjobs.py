@@ -34,10 +34,20 @@ class NoFluffJobsScraper(BaseScraper):
         errors: list[str] = []
         seen_ids: set[str] = set()
         max_pages = kwargs.get("max_pages", self.settings.scraper_max_pages)
+        max_offers = kwargs.get("max_offers")
 
         for q in queries:
+            if max_offers is not None and len(offers) >= max_offers:
+                break
+            remaining = None if max_offers is None else max_offers - len(offers)
             try:
-                fetched = self._fetch_query(q, sector, max_pages=max_pages, seen_ids=seen_ids)
+                fetched = self._fetch_query(
+                    q,
+                    sector,
+                    max_pages=max_pages,
+                    seen_ids=seen_ids,
+                    remaining=remaining,
+                )
                 offers.extend(fetched)
             except Exception as exc:  # noqa: BLE001
                 message = f"NoFluffJobs query '{q}' failed: {exc}"
@@ -65,12 +75,20 @@ class NoFluffJobsScraper(BaseScraper):
         *,
         max_pages: int,
         seen_ids: set[str],
+        remaining: int | None = None,
     ) -> list[JobOfferCreate]:
         offers: list[JobOfferCreate] = []
         offset = 0
         limit = self.settings.scraper_items_per_page
+        offer_cap = self.settings.scraper_max_offers_per_query
+        if remaining is not None:
+            offer_cap = min(offer_cap, remaining)
+        if offer_cap <= 0:
+            return offers
 
         for _page in range(max_pages):
+            if len(offers) >= offer_cap:
+                break
             params = {"limit": limit, "offset": offset, "criteria": f"category={query}"}
             payload = self.http.get_json(f"{self.settings.nofluffjobs_api_base}/posting", params=params)
             postings = payload.get("postings", [])
@@ -78,6 +96,8 @@ class NoFluffJobsScraper(BaseScraper):
                 break
 
             for posting in postings:
+                if len(offers) >= offer_cap:
+                    break
                 posting_id = posting.get("id")
                 if not posting_id or posting_id in seen_ids:
                     continue
@@ -90,6 +110,8 @@ class NoFluffJobsScraper(BaseScraper):
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("nofluffjobs_map_failed", posting_id=posting_id, error=str(exc))
 
+            if len(offers) >= offer_cap:
+                break
             if len(postings) < limit:
                 break
             offset += limit
