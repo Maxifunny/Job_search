@@ -55,7 +55,7 @@ class Settings(BaseSettings):
         alias="SCRAPER_USER_AGENT",
     )
     scraper_request_delay_seconds: float = Field(
-        default=2.0,
+        default=1.0,
         alias="SCRAPER_REQUEST_DELAY_SECONDS",
     )
     justjoin_api_base: str = Field(
@@ -76,6 +76,15 @@ class Settings(BaseSettings):
         default=30,
         alias="SCRAPER_MAX_OFFERS_PER_QUERY",
     )
+
+    @field_validator("justjoin_api_base")
+    @classmethod
+    def normalize_justjoin_api_base(cls, value: str) -> str:
+        """Map legacy /api base URL to current candidate-api endpoint."""
+        normalized = value.rstrip("/")
+        if normalized == "https://justjoin.it/api":
+            return "https://justjoin.it/api/candidate-api"
+        return normalized
 
 
 @lru_cache

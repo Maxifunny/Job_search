@@ -37,10 +37,17 @@ class JustJoinScraper(BaseScraper):
         errors: list[str] = []
         seen_slugs: set[str] = set()
         max_pages = kwargs.get("max_pages", self.settings.scraper_max_pages)
+        max_offers = kwargs.get("max_offers", self.settings.scraper_max_offers_per_query)
 
         for q in queries:
             try:
-                fetched = self._fetch_query(q, sector, max_pages=max_pages, seen_slugs=seen_slugs)
+                fetched = self._fetch_query(
+                    q,
+                    sector,
+                    max_pages=max_pages,
+                    seen_slugs=seen_slugs,
+                    max_offers=max_offers,
+                )
                 offers.extend(fetched)
             except Exception as exc:  # noqa: BLE001 - collect per-query errors
                 message = f"JustJoin query '{q}' failed: {exc}"
@@ -68,14 +75,22 @@ class JustJoinScraper(BaseScraper):
         *,
         max_pages: int,
         seen_slugs: set[str],
+        max_offers: int | None = None,
     ) -> list[JobOfferCreate]:
         offers: list[JobOfferCreate] = []
         cursor = 0
         pages = 0
+        offer_limit = max_offers or self.settings.scraper_max_offers_per_query
 
         while pages < max_pages:
+            if len(offers) >= offer_limit:
+                break
+
             params: dict[str, Any] = {
-                "itemsCount": self.settings.scraper_items_per_page,
+                "itemsCount": min(
+                    self.settings.scraper_items_per_page,
+                    offer_limit - len(offers),
+                ),
                 "from": cursor,
             }
             if query in self.CATEGORY_KEYS:
@@ -89,10 +104,18 @@ class JustJoinScraper(BaseScraper):
                 break
 
             for item in batch:
+                if len(offers) >= offer_limit:
+                    break
+
                 slug = item.get("slug")
                 if not slug or slug in seen_slugs:
                     continue
                 seen_slugs.add(slug)
+                title = item.get("title", slug)
+                print(
+                    f"[justjoin] Pobieram {len(offers) + 1}/{offer_limit}: {title}",
+                    flush=True,
+                )
                 try:
                     offers.append(self._map_offer(item, sector, query))
                 except Exception as exc:  # noqa: BLE001

@@ -30,6 +30,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Generate embeddings and upsert into ChromaDB (requires LLM_API_KEY)",
     )
+    scrape.add_argument(
+        "--max-offers",
+        type=int,
+        default=None,
+        help="Max offers per portal query (default: SCRAPER_MAX_OFFERS_PER_QUERY from .env)",
+    )
+    scrape.add_argument(
+        "--max-pages",
+        type=int,
+        default=None,
+        help="Max listing pages per query (default: SCRAPER_MAX_PAGES from .env)",
+    )
 
     sub.add_parser("match", help="Evaluate pending offers against candidate profile")
     sub.add_parser("run", help="Full pipeline: scrape → match → recommend")
@@ -46,11 +58,23 @@ def main() -> None:
         print("Database initialized.")
     elif args.command == "scrape":
         sector = JobSector(args.sector)
-        summaries = scrape_and_persist(
-            sector,
-            source=args.source,
-            sync_vectors=args.sync_vectors,
-        )
+        scrape_kwargs: dict = {}
+        if args.max_offers is not None:
+            scrape_kwargs["max_offers"] = args.max_offers
+        if args.max_pages is not None:
+            scrape_kwargs["max_pages"] = args.max_pages
+
+        try:
+            summaries = scrape_and_persist(
+                sector,
+                source=args.source,
+                sync_vectors=args.sync_vectors,
+                **scrape_kwargs,
+            )
+        except KeyboardInterrupt:
+            print("\nPrzerwano scrapowanie (Ctrl+C). Częściowe wyniki mogły zostać zapisane.")
+            return
+
         for summary in summaries:
             print(
                 f"[{summary.source}] sector={summary.sector.value} "
