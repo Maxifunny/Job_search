@@ -31,7 +31,8 @@ Job_search/
 │   └── agents/                 # Taski dla subagentów
 │       ├── repo-data-agent.md
 │       ├── scraper-agent.md
-│       └── matching-agent.md
+│       ├── matching-agent.md
+│       └── profile-agent.md
 ├── migrations/                 # Alembic
 ├── scripts/init_db.py          # Bootstrap bazy
 ├── src/job_search/
@@ -141,6 +142,68 @@ python -m job_search.cli match --profile config/profiles/default.json
 
 Portale: `justjoin`, `pracuj_pl`, `nofluffjobs` (domyślnie wszystkie naraz).
 
+```bash
+python -m job_search.cli list-sectors
+```
+
+## Konfigurowalne sektory
+
+Sektory pracy są definiowane w plikach JSON w `config/sectors/`. Możesz dodać własny zawód bez zmian w kodzie — wystarczy nowy plik sektora i profil kandydata.
+
+### Wbudowane sektory
+
+| Id | Opis |
+|----|------|
+| `data` | Data Analyst, Engineer, Scientist |
+| `automation` | Automatyk, PLC, SCADA |
+| `example` | Szablon Backend Developer (do kopiowania) |
+
+### Lista dostępnych sektorów
+
+```bash
+python -m job_search.cli list-sectors
+```
+
+### Dodanie własnego sektora
+
+1. Skopiuj szablon: `config/sectors/example.json` → `config/sectors/twoj_zawod.json`
+2. Uzupełnij `id`, `display_name`, `portal_queries`, słowa kluczowe filtrów
+3. Skopiuj profil: `config/profiles/example_backend.json` → `config/profiles/twoj_profil.json`
+4. Ustaw `"target_sectors": ["twoj_zawod"]` w profilu
+
+### Przykłady (PowerShell)
+
+```powershell
+# Lista sektorów
+python -m job_search.cli list-sectors
+
+# Scrapowanie własnego sektora
+python -m job_search.cli scrape --sector example
+
+# Pełny pipeline z własnym profilem
+python -m job_search.cli run --sector example --profile config/profiles/example_backend.json
+
+# Własny sektor + własny profil (po dodaniu plików JSON)
+python -m job_search.cli run --sector twoj_zawod --profile config/profiles/twoj_profil.json
+```
+
+Struktura pliku sektora (`config/sectors/example.json`):
+
+```json
+{
+  "id": "example",
+  "display_name": "Backend Developer (example template)",
+  "portal_queries": {
+    "justjoin": ["python", "backend"],
+    "pracuj_pl": ["backend developer", "python developer"],
+    "nofluffjobs": ["backend", "python"],
+    "linkedin": []
+  },
+  "false_positive_title_keywords": ["frontend", "graphic designer"],
+  "required_skill_keywords": ["python", "django", "fastapi", "backend", "api"]
+}
+```
+
 ### Pełny pipeline — `run`
 
 Jedna komenda uruchamia cały przepływ **SCRAPE → STORE → MATCH → RECOMMEND**:
@@ -161,7 +224,7 @@ python -m job_search.cli run --sector automation --source justjoin
 
 | Argument | Opis |
 |----------|------|
-| `--sector {data,automation}` | wymagany |
+| `--sector SECTOR` | wymagany — slug z `list-sectors` (np. `data`, `example`) |
 | `--profile PATH` | domyślnie `config/profiles/default.json` |
 | `--source {justjoin,pracuj_pl,nofluffjobs}` | opcjonalny (domyślnie wszystkie portale) |
 | `--max-offers INT` | limit scrapowania per portal |

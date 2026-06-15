@@ -7,11 +7,12 @@ from typing import Any
 
 import structlog
 
+from config.sector_loader import queries_for_sector
 from config.settings import Settings, get_settings
 from job_search.scrapers.base import BaseScraper, ScraperResult
 from job_search.scrapers.http_client import ScraperHttpClient
 from job_search.scrapers.parsers import html_to_text
-from job_search.schemas.job_offer import JobOfferCreate, JobSector
+from job_search.schemas.job_offer import JobOfferCreate, JobSector, coerce_sector_id
 
 logger = structlog.get_logger(__name__)
 
@@ -28,7 +29,7 @@ class NoFluffJobsScraper(BaseScraper):
         self.http = http_client or ScraperHttpClient(self.settings)
         self._owns_client = http_client is None
 
-    def fetch_offers(self, sector: JobSector, *, query: str | None = None, **kwargs) -> ScraperResult:
+    def fetch_offers(self, sector: JobSector | str, *, query: str | None = None, **kwargs) -> ScraperResult:
         queries = [query] if query else self._default_queries(sector)
         offers: list[JobOfferCreate] = []
         errors: list[str] = []
@@ -63,15 +64,13 @@ class NoFluffJobsScraper(BaseScraper):
         if self._owns_client:
             self.http.close()
 
-    def _default_queries(self, sector: JobSector) -> list[str]:
-        if sector == JobSector.DATA:
-            return ["data", "analytics"]
-        return ["embedded", "automation"]
+    def _default_queries(self, sector: JobSector | str) -> list[str]:
+        return queries_for_sector(coerce_sector_id(sector), self.source_name)
 
     def _fetch_query(
         self,
         query: str,
-        sector: JobSector,
+        sector: JobSector | str,
         *,
         max_pages: int,
         seen_ids: set[str],
@@ -122,7 +121,7 @@ class NoFluffJobsScraper(BaseScraper):
         self,
         posting: dict[str, Any],
         detail: dict[str, Any],
-        sector: JobSector,
+        sector: JobSector | str,
         query: str,
     ) -> JobOfferCreate:
         title = detail.get("title") or posting.get("title") or posting.get("name")
@@ -145,7 +144,7 @@ class NoFluffJobsScraper(BaseScraper):
             title=title,
             company=company,
             location=location,
-            sector=sector,
+            sector=coerce_sector_id(sector),
             description=description,
             requirements=requirements,
             skills=skills,

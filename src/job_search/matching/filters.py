@@ -1,34 +1,12 @@
 """Keyword and title-based false-positive filters."""
 
+from config.sector_loader import SectorConfig, SectorConfigError, resolve_sector
 from job_search.schemas.candidate import CandidateProfile
 from job_search.schemas.job_offer import JobOfferCreate
 
 
 class FalsePositiveFilter:
     """Reject obvious mismatches before expensive LLM calls."""
-
-    DATA_FALSE_POSITIVES = (
-        "data entry",
-        "wprowadzanie danych",
-        "wprowadzania danych",
-    )
-    AUTOMATION_FALSE_POSITIVES = ("operator produkcji", "operator maszyn", "monter")
-    ANALYTICAL_SKILLS = (
-        "python",
-        "sql",
-        "pandas",
-        "spark",
-        "tableau",
-        "power bi",
-        "analityk",
-        "analytics",
-        "data engineer",
-        "data analyst",
-        "data scientist",
-        "etl",
-        "dbt",
-    )
-    AUTOMATION_SKILLS = ("plc", "scada", "siemens", "tia portal", "allen-bradley")
 
     @classmethod
     def _structured_offer_text(cls, offer: JobOfferCreate) -> str:
@@ -37,8 +15,15 @@ class FalsePositiveFilter:
         return " ".join([offer.title, requirements, skills]).lower()
 
     @classmethod
-    def _contains_any(cls, text: str, keywords: tuple[str, ...]) -> bool:
+    def _contains_any(cls, text: str, keywords: tuple[str, ...] | list[str]) -> bool:
         return any(keyword in text for keyword in keywords)
+
+    @classmethod
+    def _sector_rules(cls, sector_id: str) -> SectorConfig | None:
+        try:
+            return resolve_sector(sector_id)
+        except SectorConfigError:
+            return None
 
     @classmethod
     def should_reject(
@@ -51,21 +36,18 @@ class FalsePositiveFilter:
             if keyword.lower() in title_lower:
                 return True, f"Excluded keyword in title: {keyword}"
 
-        if offer.sector.value == "data":
-            for false_positive in cls.DATA_FALSE_POSITIVES:
-                if false_positive in title_lower:
-                    if not cls._contains_any(structured_text, cls.ANALYTICAL_SKILLS):
-                        return True, (
-                            f"Likely false positive for Data sector: {false_positive}"
-                        )
+        sector_config = cls._sector_rules(offer.sector)
+        if sector_config is None:
+            return False, None
 
-        if offer.sector.value == "automation":
-            for false_positive in cls.AUTOMATION_FALSE_POSITIVES:
-                if false_positive in title_lower:
-                    if not cls._contains_any(structured_text, cls.AUTOMATION_SKILLS):
-                        return True, (
-                            "Likely false positive for Automation sector: "
-                            f"{false_positive}"
-                        )
+        for false_positive in sector_config.false_positive_title_keywords:
+            if false_positive in title_lower:
+                if not cls._contains_any(
+                    structured_text, sector_config.required_skill_keywords
+                ):
+                    return True, (
+                        f"Likely false positive for {sector_config.display_name}: "
+                        f"{false_positive}"
+                    )
 
         return False, None

@@ -29,7 +29,7 @@ def list_sources() -> list[str]:
     return sorted(SCRAPER_REGISTRY.keys())
 
 
-def run_scraper(source: str, sector: JobSector, **kwargs) -> ScraperResult:
+def run_scraper(source: str, sector: JobSector | str, **kwargs) -> ScraperResult:
     scraper = get_scraper(source)
     try:
         return scraper.fetch_offers(sector, **kwargs)
@@ -39,7 +39,7 @@ def run_scraper(source: str, sector: JobSector, **kwargs) -> ScraperResult:
             close()
 
 
-def run_all_scrapers(sector: JobSector, *, source: str | None = None, **kwargs) -> list[ScraperResult]:
+def run_all_scrapers(sector: JobSector | str, *, source: str | None = None, **kwargs) -> list[ScraperResult]:
     sources = [source] if source else list_sources()
     results: list[ScraperResult] = []
     for name in sources:

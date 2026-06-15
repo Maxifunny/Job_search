@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from config.settings import Settings
 from job_search.memory.embeddings import EmbeddingService, build_offer_document
-from job_search.memory.models import JobOffer, JobSectorEnum, MatchDecisionEnum
+from job_search.memory.models import JobOffer, MatchDecisionEnum
 from job_search.memory.repositories import (
     JobOfferRepository,
     MatchResultRepository,
@@ -149,7 +149,7 @@ def test_get_unmatched_offers_excludes_matched(db_session: Session):
     )
     db_session.flush()
 
-    unmatched = offer_repo.get_unmatched_offers("bob", JobSectorEnum.DATA)
+    unmatched = offer_repo.get_unmatched_offers("bob", "data")
     unmatched_ids = {offer.id for offer in unmatched}
 
     assert offer_a.id not in unmatched_ids

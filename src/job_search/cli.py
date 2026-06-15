@@ -3,11 +3,23 @@
 import argparse
 from pathlib import Path
 
+from config.sector_loader import SectorConfigError, list_sector_ids, resolve_sector
 from job_search.matching.service import load_profile, match_pending_offers
 from job_search.memory.database import init_database
 from job_search.orchestrator import JobSearchPipeline
-from job_search.schemas.job_offer import JobSector
+from job_search.schemas.job_offer import JobSector, coerce_sector_id
 from job_search.scrapers import list_sources, scrape_and_persist
+
+
+def _sector_choices() -> list[str]:
+    return list_sector_ids()
+
+
+def _parse_sector(value: str) -> JobSector:
+    try:
+        return JobSector(value)
+    except SectorConfigError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -16,12 +28,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("init-db", help="Initialize SQLite/PostgreSQL schema")
 
+    sub.add_parser(
+        "list-sectors",
+        help="List available sector ids and display names from config/sectors/",
+    )
+
     scrape = sub.add_parser("scrape", help="Run scrapers for configured sectors")
     scrape.add_argument(
         "--sector",
-        choices=[sector.value for sector in JobSector],
+        type=_parse_sector,
+        choices=_sector_choices(),
         required=True,
-        help="Target sector: data or automation",
+        help="Target sector slug (see list-sectors)",
     )
     scrape.add_argument(
         "--source",
@@ -42,8 +60,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     match.add_argument(
         "--sector",
-        choices=[sector.value for sector in JobSector],
-        help="Optional sector filter: data or automation",
+        type=_parse_sector,
+        choices=_sector_choices(),
+        help="Optional sector filter (see list-sectors)",
     )
     match.add_argument(
         "--limit",
@@ -54,9 +73,10 @@ def build_parser() -> argparse.ArgumentParser:
     run = sub.add_parser("run", help="Full pipeline: scrape → store → match → recommend")
     run.add_argument(
         "--sector",
-        choices=[sector.value for sector in JobSector],
+        type=_parse_sector,
+        choices=_sector_choices(),
         required=True,
-        help="Target sector: data or automation",
+        help="Target sector slug (see list-sectors)",
     )
     run.add_argument(
         "--profile",
@@ -101,8 +121,12 @@ def main() -> None:
     if args.command == "init-db":
         init_database()
         print("Database initialized.")
+    elif args.command == "list-sectors":
+        for sector_id in list_sector_ids():
+            config = resolve_sector(sector_id)
+            print(f"{sector_id}\t{config.display_name}")
     elif args.command == "scrape":
-        sector = JobSector(args.sector)
+        sector = args.sector
         summaries = scrape_and_persist(
             sector,
             source=args.source,
@@ -110,7 +134,7 @@ def main() -> None:
         )
         for summary in summaries:
             print(
-                f"[{summary.source}] sector={summary.sector.value} "
+                f"[{summary.source}] sector={summary.sector} "
                 f"found={summary.offers_found} new={summary.offers_new} "
                 f"updated={summary.offers_updated} errors={len(summary.errors)}"
             )
@@ -118,9 +142,10 @@ def main() -> None:
                 print(f"  - {error}")
     elif args.command == "match":
         profile = load_profile(Path(args.profile))
+        sector_arg = coerce_sector_id(args.sector) if args.sector is not None else None
         summary = match_pending_offers(
             profile,
-            sector=args.sector,
+            sector=sector_arg,
             limit=args.limit,
         )
         print(
@@ -133,7 +158,7 @@ def main() -> None:
                 f"→ {outcome.offer.url}"
             )
     elif args.command == "run":
-        sector = JobSector(args.sector)
+        sector = args.sector
         profile = load_profile(Path(args.profile))
         pipeline = JobSearchPipeline()
         try:

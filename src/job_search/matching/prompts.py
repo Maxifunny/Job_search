@@ -23,7 +23,7 @@ KANDYDAT:
 OFERTA:
 - Tytuł: {offer.title}
 - Firma: {offer.company}
-- Sektor: {offer.sector.value}
+- Sektor: {offer.sector}
 - Opis: {offer.description}
 - Wymagania: {requirements}
 - Umiejętności: {offer_skills}

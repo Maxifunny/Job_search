@@ -1,0 +1,22 @@
+{
+  "id": "automation",
+  "display_name": "Automatyka (PLC, SCADA, Automatyk)",
+  "portal_queries": {
+    "justjoin": ["automation", "plc", "scada"],
+    "pracuj_pl": ["automatyk", "programista plc", "inżynier automatyki"],
+    "nofluffjobs": ["embedded", "automation"],
+    "linkedin": []
+  },
+  "false_positive_title_keywords": [
+    "operator produkcji",
+    "operator maszyn",
+    "monter"
+  ],
+  "required_skill_keywords": [
+    "plc",
+    "scada",
+    "siemens",
+    "tia portal",
+    "allen-bradley"
+  ]
+}
