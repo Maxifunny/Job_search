@@ -1,7 +1,9 @@
 """CLI entry point for the job search system."""
 
 import argparse
+from pathlib import Path
 
+from job_search.matching.service import load_profile, match_pending_offers
 from job_search.memory.database import init_database
 from job_search.scrapers import list_sources, scrape_and_persist
 from job_search.schemas.job_offer import JobSector
@@ -31,7 +33,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Generate embeddings and upsert into ChromaDB (requires LLM_API_KEY)",
     )
 
-    sub.add_parser("match", help="Evaluate pending offers against candidate profile")
+    match = sub.add_parser("match", help="Evaluate pending offers against candidate profile")
+    match.add_argument(
+        "--profile",
+        required=True,
+        help="Path to candidate profile JSON (e.g. config/profiles/default.json)",
+    )
+    match.add_argument(
+        "--sector",
+        choices=[sector.value for sector in JobSector],
+        help="Optional sector filter: data or automation",
+    )
+    match.add_argument(
+        "--limit",
+        type=int,
+        help="Maximum number of offers to evaluate",
+    )
+
     sub.add_parser("run", help="Full pipeline: scrape → match → recommend")
 
     return parser
@@ -59,7 +77,23 @@ def main() -> None:
             )
             for error in summary.errors:
                 print(f"  - {error}")
-    elif args.command in {"match", "run"}:
+    elif args.command == "match":
+        profile = load_profile(Path(args.profile))
+        summary = match_pending_offers(
+            profile,
+            sector=args.sector,
+            limit=args.limit,
+        )
+        print(
+            f"evaluated={summary.evaluated} accepted={summary.accepted} "
+            f"rejected={summary.rejected} skipped={summary.skipped}"
+        )
+        for outcome in summary.accepted_outcomes:
+            print(
+                f"ACCEPTED: {outcome.offer.title} @ {outcome.offer.company} "
+                f"→ {outcome.offer.url}"
+            )
+    elif args.command == "run":
         print(f"Command '{args.command}' is not yet implemented.")
     else:
         parser.print_help()
