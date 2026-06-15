@@ -32,7 +32,8 @@ Job_search/
 │       ├── repo-data-agent.md
 │       ├── scraper-agent.md
 │       ├── matching-agent.md
-│       └── profile-agent.md
+│       ├── profile-agent.md
+│       └── scheduler-agent.md
 ├── migrations/                 # Alembic
 ├── scripts/init_db.py          # Bootstrap bazy
 ├── src/job_search/
@@ -117,6 +118,7 @@ Profil kandydata → Matching (filter → semantic → LLM)
 | Scraper Agent | `scrapers/` | [docs/agents/scraper-agent.md](docs/agents/scraper-agent.md) |
 | Matching Agent | `matching/` | [docs/agents/matching-agent.md](docs/agents/matching-agent.md) |
 | Master Agent | `orchestrator/` | [docs/agents/pipeline-agent.md](docs/agents/pipeline-agent.md) |
+| Scheduler Agent | `scripts/windows/` | [docs/agents/scheduler-agent.md](docs/agents/scheduler-agent.md) |
 
 ### Konwencje Git
 
@@ -220,9 +222,6 @@ python -m job_search.cli run --sector data --max-offers 5 --match-limit 5
 
 # Tylko JustJoin, sektor Automatyka
 python -m job_search.cli run --sector automation --source justjoin
-
-# Windows Task Scheduler — codziennie o 8:00
-# Program: python   Args: -m job_search.cli run --sector data --max-offers 30 --match-limit 20
 ```
 
 | Argument | Opis |
@@ -248,6 +247,44 @@ Przykładowy output:
 ✅ Data Engineer @ Acme Corp — https://justjoin.it/offers/...
 ✅ Senior Data Analyst @ DataWorks — https://justjoin.it/offers/...
 ✅ ML Engineer @ NeoML — https://justjoin.it/offers/...
+```
+
+## Windows Task Scheduler
+
+Automatyczne codzienne uruchamianie pipeline’u na Windows (bez ręcznych komend). Szczegóły: [docs/agents/scheduler-agent.md](docs/agents/scheduler-agent.md).
+
+### Wymagania
+
+- Python venv w `.venv` w katalogu repozytorium
+- Plik `.env` z `LLM_API_KEY`
+- PowerShell **jako Administrator** (tylko przy rejestracji zadania)
+
+### Rejestracja (codziennie o 8:00)
+
+```powershell
+cd C:\ścieżka\do\Job_search
+.\scripts\windows\register_scheduled_task.ps1 -Sector data -Profile config\profiles\default.json
+```
+
+Parametry opcjonalne: `-Hour`, `-Minute`, `-Source`, `-MaxOffers`, `-MatchLimit`, `-SyncVectors`, `-TaskName`, `-RunAsUser`.
+
+### Test ręczny i logi
+
+```powershell
+.\scripts\windows\run_job_search.ps1 -Sector data -Profile config\profiles\default.json
+# Log: logs\job_search_YYYYMMDD_HHmmss.log
+```
+
+### Odinstalowanie
+
+```powershell
+.\scripts\windows\register_scheduled_task.ps1 -Unregister
+```
+
+### CLI helper (wypisuje komendy PowerShell)
+
+```bash
+python -m job_search.cli schedule --sector data --profile config/profiles/default.json
 ```
 
 ## Zmienne środowiskowe
