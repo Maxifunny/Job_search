@@ -72,8 +72,14 @@ def test_evaluate_parses_structured_json_response(profile, offer):
     assert call_kwargs["response_format"] == {"type": "json_object"}
 
 
-def test_evaluate_without_api_key_returns_dev_mode_result(profile, offer, caplog):
-    evaluator = LLMEvaluator(settings=Settings(llm_api_key=""))
+def test_evaluate_without_api_key_returns_dev_mode_result(
+    profile, offer, caplog, monkeypatch
+):
+    # Isolate from the developer's .env / OS env (LLM_API_KEY would otherwise win).
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    settings = Settings(_env_file=None, llm_api_key="")
+    evaluator = LLMEvaluator(settings=settings)
 
     with caplog.at_level("WARNING"):
         result = evaluator.evaluate(offer, profile)
