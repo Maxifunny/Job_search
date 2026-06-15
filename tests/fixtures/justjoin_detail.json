@@ -1,0 +1,15 @@
+{
+  "id": "60231637-c547-43b8-a22c-0860a6033fbb",
+  "slug": "warner-bros-discovery-observability-engineer-warsaw-data-4b63f485",
+  "title": "Observability Engineer",
+  "companyName": "Warner Bros. Discovery",
+  "city": "Warsaw",
+  "workplaceType": "hybrid",
+  "body": "<p>Build observability platforms with Python and SQL.</p>",
+  "requirements": "<p>Monitoring, Grafana, Prometheus</p>",
+  "requiredSkills": [{"label": "Python"}, {"label": "SQL"}],
+  "employmentTypes": [
+    {"from": 12000, "to": 18000, "currency": "PLN", "type": "permanent", "unit": "month", "gross": true}
+  ],
+  "publishedAt": "2026-06-14T18:00:02.9875586Z"
+}

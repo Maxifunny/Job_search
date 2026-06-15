@@ -59,8 +59,22 @@ class Settings(BaseSettings):
         alias="SCRAPER_REQUEST_DELAY_SECONDS",
     )
     justjoin_api_base: str = Field(
-        default="https://justjoin.it/api",
+        default="https://justjoin.it/api/candidate-api",
         alias="JUSTJOIN_API_BASE",
+    )
+    pracuj_pl_base_url: str = Field(
+        default="https://www.pracuj.pl",
+        alias="PRACUJ_PL_BASE_URL",
+    )
+    nofluffjobs_api_base: str = Field(
+        default="https://nofluffjobs.com/api",
+        alias="NOFLUFFJOBS_API_BASE",
+    )
+    scraper_max_pages: int = Field(default=3, alias="SCRAPER_MAX_PAGES")
+    scraper_items_per_page: int = Field(default=50, alias="SCRAPER_ITEMS_PER_PAGE")
+    scraper_max_offers_per_query: int = Field(
+        default=30,
+        alias="SCRAPER_MAX_OFFERS_PER_QUERY",
     )
 
 

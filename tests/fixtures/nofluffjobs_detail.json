@@ -1,0 +1,13 @@
+{
+  "id": "data-engineer-acme-warsaw",
+  "title": "Data Engineer",
+  "company": {"name": "Acme Corp"},
+  "basics": {"technology": "Python", "category": "data"},
+  "specs": {
+    "dailyTasks": ["Build ETL pipelines", "Maintain data warehouse"]
+  },
+  "requirements": {
+    "skills": [{"name": "Python"}, {"name": "SQL"}]
+  },
+  "salary": {"from": 18000, "to": 24000}
+}
