@@ -34,7 +34,7 @@ def test_resolve_sector_returns_same_as_load():
 
 def test_queries_for_sector_source():
     queries = queries_for_sector("data", "justjoin")
-    assert queries == ["data", "analytics"]
+    assert queries == ["data", "analytics", "python"]
 
 
 def test_invalid_sector_id_raises():

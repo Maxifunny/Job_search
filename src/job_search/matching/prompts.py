@@ -8,7 +8,9 @@ def build_evaluation_prompt(offer: JobOfferCreate, profile: CandidateProfile) ->
     """Build a Polish evaluation prompt for structured LLM output."""
     target_roles = ", ".join(profile.target_roles) or "brak"
     skills = ", ".join(skill.name for skill in profile.skills) or "brak"
+    learning = ", ".join(profile.skills_to_learn) or "brak"
     cv_text = profile.cv_text or "brak"
+    notes = profile.notes or "brak"
     requirements = offer.requirements or "brak"
     offer_skills = ", ".join(offer.skills) if offer.skills else "brak"
 
@@ -18,7 +20,9 @@ Oceń dopasowanie kandydata do oferty pracy.
 KANDYDAT:
 - Docelowe role: {target_roles}
 - Umiejętności: {skills}
+- Chce się uczyć: {learning}
 - CV: {cv_text}
+- Notatki: {notes}
 
 OFERTA:
 - Tytuł: {offer.title}
@@ -37,4 +41,6 @@ Odpowiedz wyłącznie poprawnym JSON z polami:
 - explanation (string): krótkie uzasadnienie po polsku
 
 Odrzuć oferty, gdzie tytuł sugeruje inną rolę (np. "Data Entry" dla profilu Data Engineer).
+Dla kandydata junior pozytywnie oceniaj oferty wymagające Spark/Databricks/PySpark,
+jeśli opis wskazuje możliwość rozwoju lub mentoringu (brak sztywnego wymogu senior).
 Zwróć JSON bez markdown i bez dodatkowego tekstu."""

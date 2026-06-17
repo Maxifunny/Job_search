@@ -42,6 +42,8 @@ def list_profiles_for_ui() -> list[tuple[str, str]]:
         return []
     items: list[tuple[str, str]] = []
     for path in sorted(profiles_dir.glob("*.json")):
+        if path.name == "profile.template.json":
+            continue
         relative_path = str(path.relative_to(get_repo_root())).replace("\\", "/")
         items.append((relative_path, _profile_label_from_path(relative_path)))
     return items

@@ -20,6 +20,9 @@ def build_profile_document(profile: CandidateProfile) -> str:
         skill_names = ", ".join(skill.name for skill in profile.skills)
         parts.append(f"Skills: {skill_names}")
 
+    if profile.skills_to_learn:
+        parts.append(f"Learning goals: {', '.join(profile.skills_to_learn)}")
+
     if profile.cv_text:
         parts.append(profile.cv_text.strip())
 

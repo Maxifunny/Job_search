@@ -1,12 +1,14 @@
-"""Streamlit UI with simple-first UX for non-technical users."""
+"""Streamlit UI — client-friendly job search dashboard."""
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
 from pathlib import Path
 from shlex import quote
+from typing import Callable
 
 import streamlit as st
 
@@ -17,6 +19,16 @@ if str(ROOT_DIR) not in sys.path:
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
+from job_search.profiles import (  # noqa: E402
+    load_template_dict,
+    save_profile,
+    validate_profile_dict,
+)
+from ui.components import (  # noqa: E402
+    render_cards_from_rows,
+    render_loading_steps,
+    render_status_summary,
+)
 from ui.data_access import (  # noqa: E402
     SUPPORTED_SOURCES,
     database_path_from_url,
@@ -29,6 +41,14 @@ from ui.data_access import (  # noqa: E402
     list_sectors_for_ui,
 )
 
+PIPELINE_STEPS = [
+    "Przygotowanie bazy danych",
+    "Pobieranie ofert z portali",
+    "Zapisywanie ofert",
+    "Dopasowywanie do profilu",
+    "Gotowe",
+]
+
 
 def _default_state() -> None:
     defaults = {
@@ -36,13 +56,14 @@ def _default_state() -> None:
         "last_status": None,
         "last_command": "",
         "db_prepared": False,
+        "pipeline_running": False,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
 
 
-def _run_command(command: list[str]) -> tuple[int, str]:
+def _run_command(command: list[str], on_line: Callable[[str], None] | None = None) -> tuple[int, str]:
     env = os.environ.copy()
     process = subprocess.Popen(
         command,
@@ -56,7 +77,10 @@ def _run_command(command: list[str]) -> tuple[int, str]:
     output_lines: list[str] = []
     if process.stdout is not None:
         for line in process.stdout:
-            output_lines.append(line.rstrip("\n"))
+            stripped = line.rstrip("\n")
+            output_lines.append(stripped)
+            if on_line is not None:
+                on_line(stripped)
     return process.wait(), "\n".join(output_lines)
 
 
@@ -104,45 +128,45 @@ def _status_from_output(output: str) -> dict[str, int]:
     return summary
 
 
+def _detect_pipeline_step(line: str, current: str) -> str:
+    lowered = line.lower()
+    if "evaluated=" in line:
+        return "Dopasowywanie do profilu"
+    if "found=" in line and "new=" in line:
+        return "Pobieranie ofert z portali"
+    if "rekomendacje" in lowered or "[ok]" in lowered:
+        return "Gotowe"
+    if "database" in lowered or "migrate" in lowered or "initialized" in lowered:
+        return "Przygotowanie bazy danych"
+    return current
+
+
 def _ensure_database_ready(db_path: Path | None) -> bool:
     if st.session_state.get("db_prepared"):
         return True
     if db_path is None:
-        st.warning("Aktualny DATABASE_URL nie wskazuje SQLite. Pomijam automatyczne przygotowanie.")
         st.session_state["db_prepared"] = True
         return True
 
-    try:
-        with st.spinner("Przygotowuje baze danych..."):
-            setup_logs: list[str] = []
-            if not db_path.exists():
-                init_cmd = [sys.executable, "-m", "job_search.cli", "init-db"]
-                code, output = _run_command(init_cmd)
-                setup_logs.append(f"$ {' '.join(quote(p) for p in init_cmd)}\n{output}".strip())
-                if code != 0:
-                    st.session_state["last_output"] = "\n\n".join(setup_logs)
-                    st.session_state["last_command"] = " && ".join(
-                        " ".join(quote(part) for part in init_cmd)
-                    )
-                    st.error("Nie udalo sie zainicjalizowac bazy danych.")
-                    return False
-
-            migrate_cmd = [sys.executable, "-m", "job_search.cli", "migrate"]
-            code, output = _run_command(migrate_cmd)
-            setup_logs.append(f"$ {' '.join(quote(p) for p in migrate_cmd)}\n{output}".strip())
+    setup_logs: list[str] = []
+    if not db_path.exists():
+        init_cmd = [sys.executable, "-m", "job_search.cli", "init-db"]
+        code, output = _run_command(init_cmd)
+        setup_logs.append(f"$ {' '.join(quote(p) for p in init_cmd)}\n{output}".strip())
+        if code != 0:
             st.session_state["last_output"] = "\n\n".join(setup_logs)
-            st.session_state["last_command"] = " && ".join(
-                line.splitlines()[0].removeprefix("$ ") for line in setup_logs if line
-            )
-            if code != 0:
-                st.error("Baza danych nie jest gotowa. Sprawdz zakladke Diagnoza.")
-                return False
-    except Exception:
-        st.error("Wystapil problem podczas przygotowania bazy. Sprawdz zakladke Diagnoza.")
+            st.error("Nie udało się zainicjalizować bazy danych.")
+            return False
+
+    migrate_cmd = [sys.executable, "-m", "job_search.cli", "migrate"]
+    code, output = _run_command(migrate_cmd)
+    setup_logs.append(f"$ {' '.join(quote(p) for p in migrate_cmd)}\n{output}".strip())
+    st.session_state["last_output"] = "\n\n".join(setup_logs)
+    if code != 0:
+        st.error("Baza danych nie jest gotowa.")
         return False
 
     st.session_state["db_prepared"] = True
-    st.success("Baza danych jest gotowa.")
     return True
 
 
@@ -156,6 +180,7 @@ def _run_pipeline(
     sync_vectors: bool,
     db_only: bool,
     history_limit: int,
+    progress_placeholder,
 ) -> None:
     command = [
         sys.executable,
@@ -181,19 +206,46 @@ def _run_pipeline(
         command.append("--db-only")
 
     st.session_state["last_command"] = " ".join(quote(part) for part in command)
+    st.session_state["pipeline_running"] = True
+
+    current_step = PIPELINE_STEPS[0]
+    live_status: dict[str, int] = {
+        "new": 0,
+        "accepted": 0,
+        "evaluated": 0,
+        "errors": 0,
+    }
+
+    def _on_line(line: str) -> None:
+        nonlocal current_step
+        current_step = _detect_pipeline_step(line, current_step)
+        partial = _status_from_output(line + "\n")
+        for key in live_status:
+            if partial.get(key, 0):
+                live_status[key] = partial[key]
+        with progress_placeholder.container():
+            render_loading_steps(current_step, PIPELINE_STEPS)
+            render_status_summary(live_status)
+
     try:
-        with st.spinner("Szukam ofert i dopasowuje je do profilu..."):
-            return_code, final_output = _run_command(command)
+        return_code, final_output = _run_command(command, on_line=_on_line)
     except Exception:
-        st.error("Nie udalo sie uruchomic wyszukiwania. Sprobuj ponownie.")
+        st.session_state["pipeline_running"] = False
+        st.error("Nie udało się uruchomić wyszukiwania. Spróbuj ponownie.")
         return
 
     st.session_state["last_output"] = final_output
     st.session_state["last_status"] = _status_from_output(final_output)
+    st.session_state["pipeline_running"] = False
+
+    with progress_placeholder.container():
+        render_loading_steps("Gotowe", PIPELINE_STEPS)
+        render_status_summary(st.session_state["last_status"])
+
     if return_code == 0:
-        st.success("Wyszukiwanie zakonczone. Sprawdz zakladke Rekomendacje.")
+        st.success("Wyszukiwanie zakończone. Sprawdź rekomendacje poniżej.")
     else:
-        st.error("Nie udalo sie zakonczyc wyszukiwania poprawnie. Szczegoly sa w Diagnozie.")
+        st.error("Wyszukiwanie zakończyło się z błędami. Szczegóły w sekcji Diagnoza.")
 
 
 def _hide_offer(offer_id: int, profile: str) -> None:
@@ -209,200 +261,70 @@ def _hide_offer(offer_id: int, profile: str) -> None:
     ]
     st.session_state["last_command"] = " ".join(quote(part) for part in command)
     try:
-        with st.spinner("Ukrywam oferte..."):
-            return_code, output = _run_command(command)
+        return_code, output = _run_command(command)
     except Exception:
-        st.error("Nie udalo sie ukryc oferty. Sprobuj ponownie.")
+        st.error("Nie udało się ukryć oferty.")
         return
 
     st.session_state["last_output"] = output
     if return_code == 0:
-        st.success("Oferta zostala ukryta. Nie bedzie juz sugerowana dla tego profilu.")
+        st.success("Oferta została ukryta.")
+        st.rerun()
     else:
-        st.error("Nie udalo sie ukryc oferty. Sprawdz zakladke Diagnoza.")
+        st.error("Nie udało się ukryć oferty.")
 
 
 def _show_env_banner(env_exists: bool, key_present: bool) -> None:
-    env_text = ".env OK" if env_exists else "brak .env"
-    key_text = "LLM key OK" if key_present else "LLM key: brak"
-    st.info(f"Srodowisko: {env_text} | {key_text}")
-
-
-def _show_status_tab(db_path: Path | None) -> None:
-    status = st.session_state.get("last_status")
-    if not status and db_path and db_path.exists():
-        status = fetch_latest_status(db_path)
-    if not status:
-        st.info("Status pojawi sie po pierwszym uruchomieniu wyszukiwania.")
-        return
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Zescrapowane", status["scraped"])
-    col2.metric("Nowe", status["new"])
-    col3.metric("Zaktualizowane", status["updated"])
-    col4.metric("Bledy", status["errors"])
-    col5, col6, col7, col8 = st.columns(4)
-    col5.metric("Ocenione", status["evaluated"])
-    col6.metric("Zaakceptowane", status["accepted"])
-    col7.metric("Odrzucone", status["rejected"])
-    col8.metric("Pominiete", status["skipped"])
-
-
-def _show_hide_form(profile_path: str, form_key: str) -> None:
-    st.markdown("### Ukryj oferte")
-    with st.form(key=form_key):
-        offer_id = st.number_input("ID oferty", min_value=1, step=1)
-        submitted = st.form_submit_button("Ukryj oferte", use_container_width=True)
-        if submitted:
-            _hide_offer(int(offer_id), profile_path)
-
-
-def _show_recommendations_tab(
-    db_path: Path | None, sectors: list[tuple[str, str]], profile_path: str
-) -> None:
-    if not db_path or not db_path.exists():
-        st.info("Brak danych. Kliknij 'Szukaj ofert', aby pobrac pierwsze wyniki.")
-        return
-    sector_map = {sector_id: name for sector_id, name in sectors}
-    selected_sector = st.selectbox(
-        "Sektor",
-        ["all"] + [sector_id for sector_id, _ in sectors],
-        format_func=lambda sid: "Wszystkie sektory"
-        if sid == "all"
-        else f"{sector_map.get(sid, sid)}",
-        key="reco_sector",
-    )
-    selected_source = st.selectbox("Zrodlo", ["all", *SUPPORTED_SOURCES], key="reco_source")
-    search_text = st.text_input("Szukaj po tytule lub firmie", value="", key="reco_search")
-    rows = fetch_recommendations(
-        db_path,
-        sector=None if selected_sector == "all" else selected_sector,
-        source=None if selected_source == "all" else selected_source,
-        text_query=search_text,
-    )
-    pretty_rows = [
-        {
-            "ID": row.get("offer_id"),
-            "Kiedy": row.get("recommended_at"),
-            "Firma": row.get("company"),
-            "Stanowisko": row.get("title"),
-            "Sektor": sector_map.get(str(row.get("sector")), row.get("sector")),
-            "Zrodlo": row.get("source"),
-            "Decyzja": row.get("decision"),
-            "Ocena LLM": row.get("llm_score"),
-            "Ocena semantyczna": row.get("semantic_score"),
-            "Link": row.get("url"),
-        }
-        for row in rows
-    ]
-    st.dataframe(pretty_rows, use_container_width=True, hide_index=True)
-    _show_hide_form(profile_path, form_key="hide_reco_form")
-
-
-def _show_offers_tab(db_path: Path | None, sectors: list[tuple[str, str]], profile_path: str) -> None:
-    if not db_path or not db_path.exists():
-        st.info("Brak ofert do wyswietlenia.")
-        return
-    sector_map = {sector_id: name for sector_id, name in sectors}
-    selected_sector = st.selectbox(
-        "Sektor ofert",
-        ["all"] + [sector_id for sector_id, _ in sectors],
-        format_func=lambda sid: "Wszystkie sektory"
-        if sid == "all"
-        else f"{sector_map.get(sid, sid)}",
-        key="offers_sector",
-    )
-    selected_source = st.selectbox(
-        "Zrodlo ofert",
-        ["all", *SUPPORTED_SOURCES],
-        key="offers_source",
-    )
-    rows = fetch_offers(
-        db_path,
-        sector=None if selected_sector == "all" else selected_sector,
-        source=None if selected_source == "all" else selected_source,
-    )
-    pretty_rows = [
-        {
-            "ID": row.get("offer_id"),
-            "Kiedy widziana": row.get("last_seen_at"),
-            "Sektor": sector_map.get(str(row.get("sector")), row.get("sector")),
-            "Zrodlo": row.get("source"),
-            "Firma": row.get("company"),
-            "Stanowisko": row.get("title"),
-            "Aktywna": "tak" if row.get("is_active") else "nie",
-            "Link": row.get("url"),
-        }
-        for row in rows
-    ]
-    st.dataframe(pretty_rows, use_container_width=True, hide_index=True)
-    _show_hide_form(profile_path, form_key="hide_offers_form")
-
-
-def _show_diag_tab() -> None:
-    command = st.session_state.get("last_command", "")
-    output = st.session_state.get("last_output", "")
-    if command:
-        st.caption("Ostatnie polecenie")
-        st.code(command)
-    if output:
-        st.text_area("Surowe logi (STDOUT/STDERR)", output, height=440)
+    if env_exists and key_present:
+        st.caption("System gotowy do wyszukiwania ofert.")
     else:
-        st.info("Brak danych diagnostycznych.")
+        missing = []
+        if not env_exists:
+            missing.append("plik .env")
+        if not key_present:
+            missing.append("klucz LLM_API_KEY")
+        st.warning(f"Brakuje: {', '.join(missing)}. Dopasowanie może nie działać poprawnie.")
 
 
-def main() -> None:
-    st.set_page_config(page_title="Job Search UI", layout="wide")
-    _default_state()
-
-    sectors = list_sectors_for_ui()
-    profiles = list_profiles_for_ui()
-    db_path = database_path_from_url()
-    env_exists, key_present = detect_env_status()
-
-    st.title("Asystent wyszukiwania ofert")
-    st.caption("Tryb prosty: wybierz sektor i profil, a reszte wykonamy automatycznie.")
-    _show_env_banner(env_exists, key_present)
-
-    if not sectors:
-        st.error("Nie znaleziono skonfigurowanych sektorow.")
-        return
-
+def _show_search_page(
+    sectors: list[tuple[str, str]],
+    profile_options: list[tuple[str, str]],
+    db_path: Path | None,
+) -> str:
     sector_options = [sector_id for sector_id, _ in sectors]
     sector_labels = {sector_id: name for sector_id, name in sectors}
-    profile_options = profiles or [("config/profiles/default.json", "Domyslny profil")]
     profile_map = {path: label for path, label in profile_options}
 
-    selected_sector = st.selectbox(
-        "Sektor",
-        options=sector_options,
-        format_func=lambda sector_id: sector_labels.get(sector_id, sector_id),
-    )
-    selected_profile = st.selectbox(
-        "Profil",
-        options=[path for path, _ in profile_options],
-        format_func=lambda path: profile_map.get(path, path),
-    )
-
-    source = "all"
-    max_offers = 20
-    match_limit = 20
-    sync_vectors = True
-    db_only = False
-    history_limit = 10
+    col1, col2 = st.columns(2)
+    with col1:
+        selected_sector = st.selectbox(
+            "Sektor",
+            options=sector_options,
+            format_func=lambda sector_id: sector_labels.get(sector_id, sector_id),
+        )
+    with col2:
+        selected_profile = st.selectbox(
+            "Profil",
+            options=[path for path, _ in profile_options],
+            format_func=lambda path: profile_map.get(path, path),
+        )
 
     with st.expander("Ustawienia zaawansowane", expanded=False):
-        source = st.selectbox("Zrodlo", options=["all", *SUPPORTED_SOURCES], index=0)
-        max_offers = int(st.number_input("Maksymalna liczba ofert", min_value=1, value=20, step=1))
-        match_limit = int(st.number_input("Limit dopasowan", min_value=1, value=20, step=1))
+        source = st.selectbox("Źródło", options=["all", *SUPPORTED_SOURCES], index=0)
+        max_offers = int(st.number_input("Maks. ofert", min_value=1, value=20, step=1))
+        match_limit = int(st.number_input("Limit dopasowań LLM", min_value=1, value=20, step=1))
         sync_vectors = st.toggle("Synchronizuj wektory (ChromaDB)", value=True)
         db_only = st.toggle("Tylko dane z bazy (bez scrapowania)", value=False)
         history_limit = int(
-            st.number_input("Liczba historycznych rekomendacji", min_value=0, value=10, step=1)
+            st.number_input("Historia rekomendacji w logu", min_value=0, value=10, step=1)
         )
 
-    run_button = st.button("Szukaj ofert", type="primary", use_container_width=True)
-    if run_button:
+    progress_placeholder = st.empty()
+
+    if st.button("Szukaj ofert", type="primary", use_container_width=True):
         if _ensure_database_ready(db_path):
+            with progress_placeholder.container():
+                render_loading_steps(PIPELINE_STEPS[0], PIPELINE_STEPS)
             _run_pipeline(
                 sector=selected_sector,
                 profile=selected_profile,
@@ -412,17 +334,165 @@ def main() -> None:
                 sync_vectors=sync_vectors,
                 db_only=db_only,
                 history_limit=history_limit,
+                progress_placeholder=progress_placeholder,
             )
 
-    tabs = st.tabs(["Rekomendacje", "Status", "Oferty", "Diagnoza"])
-    with tabs[0]:
-        _show_recommendations_tab(db_path, sectors, selected_profile)
-    with tabs[1]:
-        _show_status_tab(db_path)
-    with tabs[2]:
-        _show_offers_tab(db_path, sectors, selected_profile)
-    with tabs[3]:
-        _show_diag_tab()
+    status = st.session_state.get("last_status")
+    if status:
+        st.markdown("### Podsumowanie ostatniego wyszukiwania")
+        render_status_summary(status)
+
+    st.markdown("### Najnowsze rekomendacje")
+    _show_recommendations_cards(db_path, sectors, selected_profile, limit=5)
+
+    return selected_profile
+
+
+def _show_recommendations_cards(
+    db_path: Path | None,
+    sectors: list[tuple[str, str]],
+    profile_path: str,
+    *,
+    limit: int = 50,
+) -> None:
+    if not db_path or not db_path.exists():
+        st.info("Brak danych. Kliknij „Szukaj ofert”, aby pobrać pierwsze wyniki.")
+        return
+
+    sector_map = {sector_id: name for sector_id, name in sectors}
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        selected_sector = st.selectbox(
+            "Sektor",
+            ["all"] + [sector_id for sector_id, _ in sectors],
+            format_func=lambda sid: "Wszystkie sektory"
+            if sid == "all"
+            else f"{sector_map.get(sid, sid)}",
+            key="reco_sector",
+        )
+    with col2:
+        selected_source = st.selectbox("Źródło", ["all", *SUPPORTED_SOURCES], key="reco_source")
+    with col3:
+        search_text = st.text_input("Szukaj", value="", key="reco_search", placeholder="Firma lub stanowisko")
+
+    rows = fetch_recommendations(
+        db_path,
+        sector=None if selected_sector == "all" else selected_sector,
+        source=None if selected_source == "all" else selected_source,
+        text_query=search_text,
+        limit=limit,
+    )
+    render_cards_from_rows(
+        rows,
+        sector_map,
+        hide_callback=_hide_offer,
+        profile_path=profile_path,
+    )
+
+
+def _show_profile_page() -> None:
+    st.markdown("### Mój profil")
+    st.caption(
+        "Pobierz szablon JSON, uzupełnij swoje dane i wgraj plik. "
+        "Profil zostanie zapisany lokalnie — gotowe pod przyszły hosting (AWS/Azure)."
+    )
+
+    template = load_template_dict()
+    template_json = json.dumps(template, ensure_ascii=False, indent=2)
+    st.download_button(
+        "Pobierz przykładowy profil (JSON)",
+        data=template_json,
+        file_name="profile.template.json",
+        mime="application/json",
+        use_container_width=True,
+    )
+
+    uploaded = st.file_uploader("Wgraj swój profil JSON", type=["json"])
+    if uploaded is not None:
+        try:
+            data = json.loads(uploaded.getvalue().decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            st.error(f"Niepoprawny plik JSON: {exc}")
+            return
+
+        result = validate_profile_dict(data)
+        if result.warnings:
+            for warning in result.warnings:
+                st.warning(warning)
+
+        if result.errors:
+            st.error("Profil wymaga poprawek:")
+            for error in result.errors:
+                st.markdown(f"- {error}")
+            return
+
+        assert result.profile is not None
+        st.success(f"Profil poprawny: {result.profile.name}")
+
+        with st.expander("Podgląd profilu", expanded=False):
+            st.json(result.profile.model_dump(mode="json"))
+
+        if st.button("Zapisz profil", type="primary", use_container_width=True):
+            saved = save_profile(result.profile)
+            st.success(f"Zapisano: {saved}")
+            st.rerun()
+
+
+def _show_diag_expander() -> None:
+    with st.expander("Diagnoza (dla administratora)", expanded=False):
+        command = st.session_state.get("last_command", "")
+        output = st.session_state.get("last_output", "")
+        if command:
+            st.caption("Ostatnie polecenie")
+            st.code(command)
+        if output:
+            st.text_area("Logi", output, height=300)
+        else:
+            st.info("Brak logów.")
+
+
+def main() -> None:
+    st.set_page_config(page_title="Job Search", page_icon="🔍", layout="wide")
+    _default_state()
+
+    sectors = list_sectors_for_ui()
+    profiles = list_profiles_for_ui()
+    db_path = database_path_from_url()
+    env_exists, key_present = detect_env_status()
+
+    with st.sidebar:
+        st.title("Job Search")
+        page = st.radio(
+            "Menu",
+            ["Szukaj ofert", "Rekomendacje", "Mój profil"],
+            label_visibility="collapsed",
+        )
+        _show_env_banner(env_exists, key_present)
+
+    if not sectors:
+        st.error("Nie znaleziono skonfigurowanych sektorów.")
+        return
+
+    profile_options = profiles or [("config/profiles/default.json", "Domyślny profil")]
+
+    if page == "Szukaj ofert":
+        st.header("Szukaj ofert")
+        st.caption("Wybierz sektor i profil — resztę wykonamy automatycznie.")
+        selected_profile = _show_search_page(sectors, profile_options, db_path)
+        _show_diag_expander()
+    elif page == "Rekomendacje":
+        st.header("Rekomendacje")
+        default_profile = profile_options[0][0]
+        profile_path = st.selectbox(
+            "Profil (do ukrywania ofert)",
+            options=[path for path, _ in profile_options],
+            format_func=lambda p: dict(profile_options).get(p, p),
+        )
+        _show_recommendations_cards(db_path, sectors, profile_path or default_profile)
+        _show_diag_expander()
+    else:
+        _show_profile_page()
+        _show_diag_expander()
 
 
 if __name__ == "__main__":
