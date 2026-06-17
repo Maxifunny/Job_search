@@ -5,11 +5,17 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
+from typing import Mapping
 
 from openai import OpenAI
 
 from config.settings import Settings, get_settings
 from job_search.matching.prompts import build_evaluation_prompt
+from job_search.observability.api_usage import (
+    extract_token_usage,
+    format_api_usage_log,
+    parse_quota_headers,
+)
 from job_search.schemas.candidate import CandidateProfile
 from job_search.schemas.job_offer import JobOfferCreate
 
@@ -56,6 +62,34 @@ class LLMEvaluator:
             is_relevant_role=False,
         )
 
+    def _create_completion_with_headers(
+        self, prompt: str
+    ) -> tuple[object, Mapping[str, str] | None]:
+        kwargs = {
+            "model": self.settings.llm_model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Jesteś asystentem HR. Odpowiadaj wyłącznie poprawnym JSON."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "response_format": {"type": "json_object"},
+        }
+        completions_api = self.client.chat.completions
+        if hasattr(completions_api, "with_raw_response"):
+            raw_response = completions_api.with_raw_response.create(**kwargs)
+            parsed = raw_response.parse()
+            try:
+                content = parsed.choices[0].message.content
+            except (AttributeError, IndexError, TypeError):
+                content = None
+            if isinstance(content, str):
+                return parsed, getattr(raw_response, "headers", None)
+        return completions_api.create(**kwargs), None
+
     def evaluate(
         self, offer: JobOfferCreate, profile: CandidateProfile
     ) -> LLMEvaluation:
@@ -66,19 +100,18 @@ class LLMEvaluator:
             return self._dev_mode_result()
 
         prompt = build_evaluation_prompt(offer, profile)
-        response = self.client.chat.completions.create(
-            model=self.settings.llm_model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Jesteś asystentem HR. Odpowiadaj wyłącznie poprawnym JSON."
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
-            response_format={"type": "json_object"},
-        )
+        response, headers = self._create_completion_with_headers(prompt)
+
+        if self.settings.log_api_quota:
+            logger.info(
+                format_api_usage_log(
+                    endpoint="chat.completions",
+                    model=self.settings.llm_model,
+                    usage=extract_token_usage(response),
+                    quota=parse_quota_headers(headers),
+                    api_key=self.settings.llm_api_key,
+                )
+            )
 
         content = response.choices[0].message.content or "{}"
         payload = json.loads(content)

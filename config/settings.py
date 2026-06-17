@@ -46,6 +46,7 @@ class Settings(BaseSettings):
         default="text-embedding-3-small",
         alias="EMBEDDING_MODEL",
     )
+    log_api_quota: bool = Field(default=True, alias="LOG_API_QUOTA")
 
     min_semantic_score: float = Field(default=0.65, alias="MIN_SEMANTIC_SCORE")
     min_llm_confidence: float = Field(default=0.70, alias="MIN_LLM_CONFIDENCE")
