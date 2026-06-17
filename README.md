@@ -93,10 +93,14 @@ pytest tests/ -v
 
 Interfejs demonstracyjny dla użytkowników nietechnicznych:
 
-- uruchamianie pipeline jednym kliknięciem,
-- podgląd statusu ostatniego uruchomienia,
-- tabela rekomendacji i ofert,
-- logi diagnostyczne STDOUT/STDERR.
+- **Tryb prosty (domyslny):** wybor sektora, wybor profilu, przycisk **"Szukaj ofert"**.
+- **Ustawienia zaawansowane (zwijane):** zrodlo, max_offers, match_limit, sync_vectors, db_only, history_limit.
+- Automatyczne przygotowanie bazy przed pierwszym uruchomieniem:
+  - gdy brak pliku SQLite: `python -m job_search.cli init-db`,
+  - nastepnie zawsze: `python -m job_search.cli migrate`.
+- Zakladki: **Rekomendacje** (widok glowny), **Status**, **Oferty**, **Diagnoza** (surowe logi i ostatnia komenda).
+- Mozliwosc ukrycia oferty po ID z poziomu UI.
+- Czytelny status srodowiska: `.env OK / brak .env` oraz `LLM key OK / brak` (bez ujawniania sekretow).
 
 Uruchomienie (Linux/macOS):
 
