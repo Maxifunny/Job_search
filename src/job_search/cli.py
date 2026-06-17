@@ -13,6 +13,12 @@ from job_search.matching.service import (
 from job_search.memory.database import get_session, init_database, migrate_database
 from job_search.memory.repositories import JobOfferRepository
 from job_search.orchestrator import JobSearchPipeline
+from job_search.profiles import (
+    load_template_dict,
+    save_profile,
+    template_path,
+    validate_profile_file,
+)
 from job_search.schemas.job_offer import JobSector, coerce_sector_id
 from job_search.scrapers import list_sources, scrape_and_persist
 
@@ -199,6 +205,41 @@ def build_parser() -> argparse.ArgumentParser:
         help="Daily trigger minute (default: 0)",
     )
 
+    profile = sub.add_parser("profile", help="Manage candidate profile JSON files")
+    profile_sub = profile.add_subparsers(dest="profile_command")
+
+    profile_template = profile_sub.add_parser(
+        "template",
+        help="Print or save the example profile JSON template",
+    )
+    profile_template.add_argument(
+        "--output",
+        "-o",
+        help="Save template to this path (default: print to stdout)",
+    )
+
+    profile_validate = profile_sub.add_parser(
+        "validate",
+        help="Validate a profile JSON file without saving",
+    )
+    profile_validate.add_argument(
+        "path",
+        help="Path to profile JSON (e.g. config/profiles/default.json)",
+    )
+
+    profile_save = profile_sub.add_parser(
+        "save",
+        help="Validate and save a profile JSON into config/profiles/",
+    )
+    profile_save.add_argument(
+        "path",
+        help="Path to profile JSON to import",
+    )
+    profile_save.add_argument(
+        "--filename",
+        help="Override output filename (default: <profile.name>.json)",
+    )
+
     return parser
 
 
@@ -317,6 +358,46 @@ def main() -> None:
                 f"[hide-offer] Ukryto ofertę id={offer.id} "
                 f"({offer.title} @ {offer.company}) dla profilu '{profile.name}'."
             )
+    elif args.command == "profile":
+        if args.profile_command == "template":
+            import json
+
+            data = load_template_dict()
+            payload = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+            if args.output:
+                out = Path(args.output)
+                out.write_text(payload, encoding="utf-8")
+                print(f"Szablon zapisany: {out}")
+            else:
+                print(payload, end="")
+        elif args.profile_command == "validate":
+            result = validate_profile_file(Path(args.path))
+            for warning in result.warnings:
+                print(f"UWAGA: {warning}")
+            if result.errors:
+                for error in result.errors:
+                    print(f"BŁĄD: {error}")
+                sys.exit(1)
+            print(f"Profil poprawny: {args.path} (name={result.profile.name})")
+        elif args.profile_command == "save":
+            path = Path(args.path)
+            if not path.is_file():
+                print(f"BŁĄD: Nie znaleziono pliku: {path}")
+                sys.exit(1)
+            result = validate_profile_file(path)
+
+            for warning in result.warnings:
+                print(f"UWAGA: {warning}")
+            if result.errors or result.profile is None:
+                for error in result.errors:
+                    print(f"BŁĄD: {error}")
+                sys.exit(1)
+
+            saved = save_profile(result.profile, filename=args.filename)
+            print(f"Profil zapisany: {saved}")
+        else:
+            print("Użycie: profile template | profile validate <path> | profile save <path>")
+            print(f"Szablon: {template_path()}")
     elif args.command == "schedule":
         profile = args.profile.replace("/", "\\")
         sync_flag = " -SyncVectors" if args.sync_vectors else ""

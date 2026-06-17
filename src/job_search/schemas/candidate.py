@@ -27,6 +27,10 @@ class CandidateProfile(BaseModel):
         ]
     )
     skills: list[SkillEntry] = Field(default_factory=list)
+    skills_to_learn: list[str] = Field(
+        default_factory=list,
+        description="Technologies the candidate wants to develop (positive signal for junior roles).",
+    )
     preferred_locations: list[str] = Field(default_factory=list)
     min_salary: float | None = None
     remote_only: bool = False

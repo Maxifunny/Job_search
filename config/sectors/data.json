@@ -2,10 +2,10 @@
   "id": "data",
   "display_name": "Data (Analyst, Engineer, Scientist)",
   "portal_queries": {
-    "justjoin": ["data", "analytics"],
-    "pracuj_pl": ["data analyst", "data engineer", "data scientist"],
-    "nofluffjobs": ["data", "analytics"],
-    "linkedin": ["data engineer", "data analyst"]
+    "justjoin": ["data", "analytics", "python"],
+    "pracuj_pl": ["junior data analyst", "junior data engineer", "data engineer", "data analyst"],
+    "nofluffjobs": ["data", "analytics", "python"],
+    "linkedin": ["junior data engineer", "data engineer", "pyspark", "databricks"]
   },
   "false_positive_title_keywords": [
     "data entry",
@@ -17,6 +17,11 @@
     "sql",
     "pandas",
     "spark",
+    "pyspark",
+    "databricks",
+    "delta lake",
+    "kafka",
+    "airflow",
     "tableau",
     "power bi",
     "analityk",
@@ -24,6 +29,7 @@
     "data engineer",
     "data analyst",
     "data scientist",
+    "junior",
     "etl",
     "dbt"
   ]

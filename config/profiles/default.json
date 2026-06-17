@@ -1,22 +1,45 @@
 {
   "name": "default",
-  "target_sectors": ["data", "automation"],
+  "target_sectors": ["data"],
   "target_roles": [
+    "Junior Data Engineer",
+    "Junior Data Analyst",
     "Data Engineer",
-    "Data Analyst",
-    "Programista PLC",
-    "Automatyk"
+    "Data Analyst"
   ],
   "skills": [
-    {"name": "Python", "years": 3},
-    {"name": "SQL", "years": 4},
-    {"name": "TIA Portal", "years": 2},
-    {"name": "Pandas", "years": 2}
+    {"name": "Python", "level": "junior", "years": 1.5},
+    {"name": "SQL", "level": "junior", "years": 2},
+    {"name": "Pandas", "level": "junior", "years": 1},
+    {"name": "Git", "level": "junior", "years": 1},
+    {"name": "Spark", "level": "learning", "years": 0.5},
+    {"name": "PySpark", "level": "learning", "years": 0.5},
+    {"name": "Databricks", "level": "learning", "years": 0.5},
+    {"name": "dbt", "level": "learning", "years": 0.5},
+    {"name": "Airflow", "level": "learning", "years": 0.5}
   ],
+  "skills_to_learn": [
+    "Apache Spark",
+    "PySpark",
+    "Databricks",
+    "Delta Lake",
+    "Kafka",
+    "dbt",
+    "Airflow",
+    "Power BI",
+    "Tableau"
+  ],
+  "preferred_locations": ["Warszawa", "Kraków", "Wrocław", "Remote"],
+  "min_salary": null,
+  "remote_only": false,
   "excluded_keywords": [
     "data entry",
     "wprowadzanie danych",
-    "staż bez wynagrodzenia"
+    "staż bez wynagrodzenia",
+    "senior only",
+    "principal",
+    "10+ lat doświadczenia"
   ],
-  "cv_text": "Specjalista z doświadczeniem w analityce danych (Python, SQL, Pandas) oraz automatyce przemysłowej (TIA Portal, PLC). Szukam ról łączących data engineering z projektami automatyki."
+  "cv_text": "Junior Data Engineer / Analyst z podstawami Python, SQL i Pandas. Aktywnie uczę się ekosystemu Spark (PySpark, Databricks) oraz narzędzi ETL (dbt, Airflow). Szukam roli, w której mogę rozwijać umiejętności data engineering przy wsparciu zespołu.",
+  "notes": "Preferuję oferty junior/mid. Oferty wymagające Spark/Databricks traktuję pozytywnie, jeśli jest przestrzeń na naukę."
 }
