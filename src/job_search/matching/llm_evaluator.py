@@ -10,6 +10,7 @@ from typing import Mapping
 from openai import OpenAI
 
 from config.settings import Settings, get_settings
+from job_search.llm.model_fallback import build_model_chain, run_with_model_fallback
 from job_search.matching.prompts import build_evaluation_prompt
 from job_search.observability.api_usage import (
     extract_token_usage,
@@ -42,6 +43,7 @@ class LLMEvaluator:
     ) -> None:
         self.settings = settings or get_settings()
         self._client = client
+        self.last_model_used: str | None = None
 
     @property
     def client(self) -> OpenAI:
@@ -51,6 +53,12 @@ class LLMEvaluator:
                 base_url=self.settings.llm_base_url,
             )
         return self._client
+
+    def _model_chain(self) -> list[str]:
+        return build_model_chain(
+            self.settings.llm_model,
+            self.settings.llm_fallback_models,
+        )
 
     def _dev_mode_result(self) -> LLMEvaluation:
         return LLMEvaluation(
@@ -63,10 +71,13 @@ class LLMEvaluator:
         )
 
     def _create_completion_with_headers(
-        self, prompt: str
+        self,
+        prompt: str,
+        *,
+        model: str,
     ) -> tuple[object, Mapping[str, str] | None]:
         kwargs = {
-            "model": self.settings.llm_model,
+            "model": model,
             "messages": [
                 {
                     "role": "system",
@@ -100,13 +111,23 @@ class LLMEvaluator:
             return self._dev_mode_result()
 
         prompt = build_evaluation_prompt(offer, profile)
-        response, headers = self._create_completion_with_headers(prompt)
+
+        def _call(model: str) -> tuple[object, Mapping[str, str] | None]:
+            return self._create_completion_with_headers(prompt, model=model)
+
+        (response, headers), model_used = run_with_model_fallback(
+            self._model_chain(),
+            _call,
+            retries_per_model=self.settings.llm_retry_attempts,
+            endpoint_label="chat.completions",
+        )
+        self.last_model_used = model_used
 
         if self.settings.log_api_quota:
             logger.info(
                 format_api_usage_log(
                     endpoint="chat.completions",
-                    model=self.settings.llm_model,
+                    model=model_used,
                     usage=extract_token_usage(response),
                     quota=parse_quota_headers(headers),
                     api_key=self.settings.llm_api_key,

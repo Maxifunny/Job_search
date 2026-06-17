@@ -119,6 +119,12 @@ class JobSearchPipeline:
         result.accepted = match_summary.accepted
         result.rejected = match_summary.rejected
         result.skipped = match_summary.skipped
+        result.errors.extend(match_summary.errors)
+        if match_summary.failed:
+            print(
+                f"[pipeline] Matching: {match_summary.failed} ofert pominięto "
+                f"z powodu błędów API (sprawdź limity / fallback modeli)."
+            )
         for outcome in match_summary.accepted_outcomes:
             offer = outcome.offer
             result.recommendations.append(

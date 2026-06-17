@@ -64,7 +64,8 @@ class MockEmbeddingService(EmbeddingService):
     """Deterministic embeddings for tests without OpenAI calls."""
 
     def embed_text(self, text: str) -> list[float]:
-        cached = self._load_cached(text)
+        model = self.settings.embedding_model
+        cached = self._load_cached(text, model=model)
         if cached is not None:
             return cached
 
@@ -76,7 +77,7 @@ class MockEmbeddingService(EmbeddingService):
             float("plc" in text_lower or "automation" in text_lower),
             float("data" in text_lower),
         ]
-        self._save_cache(text, vector)
+        self._save_cache(text, vector, model=model)
         return vector
 
 

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from config.settings import Settings, get_settings
 from job_search.memory.models import EmbeddingCache
+from job_search.llm.model_fallback import build_model_chain, run_with_model_fallback
 from job_search.observability.api_usage import (
     extract_token_usage,
     format_api_usage_log,
@@ -48,6 +49,7 @@ class EmbeddingService:
         self.settings = settings or get_settings()
         self.session = session
         self._client = client
+        self.last_model_used: str | None = None
 
     @property
     def client(self) -> OpenAI:
@@ -58,35 +60,44 @@ class EmbeddingService:
             )
         return self._client
 
-    def _load_cached(self, text: str) -> list[float] | None:
+    def _model_chain(self) -> list[str]:
+        return build_model_chain(
+            self.settings.embedding_model,
+            self.settings.embedding_fallback_models,
+        )
+
+    def _load_cached(self, text: str, *, model: str) -> list[float] | None:
         if self.session is None:
             return None
         text_hash = _text_hash(text)
         stmt = select(EmbeddingCache).where(
             EmbeddingCache.text_hash == text_hash,
-            EmbeddingCache.model == self.settings.embedding_model,
+            EmbeddingCache.model == model,
         )
         cached = self.session.scalar(stmt)
         if cached is None:
             return None
         return json.loads(cached.embedding_json)
 
-    def _save_cache(self, text: str, embedding: list[float]) -> None:
+    def _save_cache(self, text: str, embedding: list[float], *, model: str) -> None:
         if self.session is None:
             return
         self.session.add(
             EmbeddingCache(
                 text_hash=_text_hash(text),
-                model=self.settings.embedding_model,
+                model=model,
                 embedding_json=json.dumps(embedding),
             )
         )
         self.session.flush()
 
     def _create_embedding_with_headers(
-        self, text: str
+        self,
+        text: str,
+        *,
+        model: str,
     ) -> tuple[object, Mapping[str, str] | None]:
-        kwargs = {"model": self.settings.embedding_model, "input": text}
+        kwargs = {"model": model, "input": text}
         embeddings_api = self.client.embeddings
         if hasattr(embeddings_api, "with_raw_response"):
             raw_response = embeddings_api.with_raw_response.create(**kwargs)
@@ -101,21 +112,33 @@ class EmbeddingService:
 
     def embed_text(self, text: str) -> list[float]:
         """Return embedding vector for text, using cache when available."""
-        cached = self._load_cached(text)
-        if cached is not None:
-            return cached
+        for model in self._model_chain():
+            cached = self._load_cached(text, model=model)
+            if cached is not None:
+                self.last_model_used = model
+                return cached
 
-        response, headers = self._create_embedding_with_headers(text)
+        def _call(selected_model: str) -> tuple[object, Mapping[str, str] | None]:
+            return self._create_embedding_with_headers(text, model=selected_model)
+
+        (response, headers), model_used = run_with_model_fallback(
+            self._model_chain(),
+            _call,
+            retries_per_model=self.settings.llm_retry_attempts,
+            endpoint_label="embeddings.create",
+        )
+        self.last_model_used = model_used
+
         if self.settings.log_api_quota:
             logger.info(
                 format_api_usage_log(
                     endpoint="embeddings.create",
-                    model=self.settings.embedding_model,
+                    model=model_used,
                     usage=extract_token_usage(response),
                     quota=parse_quota_headers(headers),
                     api_key=self.settings.llm_api_key,
                 )
             )
         embedding = response.data[0].embedding
-        self._save_cache(text, embedding)
+        self._save_cache(text, embedding, model=model_used)
         return embedding

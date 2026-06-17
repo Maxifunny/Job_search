@@ -292,7 +292,8 @@ def main() -> None:
         )
         print(
             f"evaluated={summary.evaluated} accepted={summary.accepted} "
-            f"rejected={summary.rejected} skipped={summary.skipped}"
+            f"rejected={summary.rejected} skipped={summary.skipped} "
+            f"failed={summary.failed}"
         )
         for outcome in summary.accepted_outcomes:
             print(

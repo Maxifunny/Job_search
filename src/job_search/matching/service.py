@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -20,6 +21,8 @@ from job_search.memory.repositories import JobOfferRepository, MatchResultReposi
 from job_search.schemas.candidate import CandidateProfile
 from job_search.schemas.job_offer import JobOfferCreate, JobSector, coerce_sector_id
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class MatchRunSummary:
@@ -27,6 +30,8 @@ class MatchRunSummary:
     accepted: int = 0
     rejected: int = 0
     skipped: int = 0
+    failed: int = 0
+    errors: list[str] = field(default_factory=list)
     accepted_outcomes: list[MatchOutcome] = field(default_factory=list)
 
 
@@ -114,11 +119,21 @@ def match_pending_offers(
             offers = offers[:limit]
 
         for offer in offers:
-            outcome = matching_engine.evaluate_offer(
-                offer_orm_to_schema(offer),
-                profile,
-                job_offer_id=offer.id,
-            )
+            try:
+                outcome = matching_engine.evaluate_offer(
+                    offer_orm_to_schema(offer),
+                    profile,
+                    job_offer_id=offer.id,
+                )
+            except Exception as exc:
+                message = (
+                    f"Offer id={offer.id} ({offer.title} @ {offer.company}): {exc}"
+                )
+                logger.error("Matching failed for single offer: %s", message)
+                summary.failed += 1
+                summary.errors.append(message)
+                continue
+
             summary.evaluated += 1
             if outcome.decision == MatchDecisionEnum.ACCEPTED:
                 summary.accepted += 1
