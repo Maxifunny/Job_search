@@ -77,6 +77,9 @@ class JobOffer(Base):
     recommendations: Mapped[list["Recommendation"]] = relationship(
         back_populates="job_offer", cascade="all, delete-orphan"
     )
+    hidden_for_candidates: Mapped[list["HiddenOffer"]] = relationship(
+        back_populates="job_offer", cascade="all, delete-orphan"
+    )
 
 
 class ScrapeRun(Base):
@@ -156,6 +159,32 @@ class Recommendation(Base):
     user_action: Mapped[str | None] = mapped_column(String(64))
 
     job_offer: Mapped[JobOffer] = relationship(back_populates="recommendations")
+
+
+class HiddenOffer(Base):
+    """
+    Candidate-level hidden offers.
+
+    Once hidden, the offer is skipped by matching for that candidate and can be
+    excluded from recommendation views/output.
+    """
+
+    __tablename__ = "hidden_offers"
+    __table_args__ = (
+        UniqueConstraint("job_offer_id", "candidate_name", name="uq_hidden_offer_candidate"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_offer_id: Mapped[int] = mapped_column(
+        ForeignKey("job_offers.id", ondelete="CASCADE"), nullable=False
+    )
+    candidate_name: Mapped[str] = mapped_column(String(128), default="default")
+    reason: Mapped[str | None] = mapped_column(String(255))
+    hidden_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    job_offer: Mapped[JobOffer] = relationship(back_populates="hidden_for_candidates")
 
 
 class UserPreference(Base):

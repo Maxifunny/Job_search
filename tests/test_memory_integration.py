@@ -156,6 +156,25 @@ def test_get_unmatched_offers_excludes_matched(db_session: Session):
     assert offer_b.id in unmatched_ids
 
 
+def test_get_unmatched_offers_excludes_hidden(db_session: Session):
+    offer_repo = JobOfferRepository(db_session)
+
+    offer_a, _ = offer_repo.upsert(_sample_offer(external_id="hidden-a"))
+    offer_b, _ = offer_repo.upsert(
+        _sample_offer(external_id="visible-b", title="Data Analyst", skills=["SQL"])
+    )
+    db_session.flush()
+
+    offer_repo.hide_offer(offer_a.id, "alice", reason="not interested")
+    db_session.flush()
+
+    unmatched = offer_repo.get_unmatched_offers("alice", "data")
+    unmatched_ids = {offer.id for offer in unmatched}
+
+    assert offer_a.id not in unmatched_ids
+    assert offer_b.id in unmatched_ids
+
+
 def test_deactivate_stale_offers(db_session: Session):
     repo = JobOfferRepository(db_session)
     offer, _ = repo.upsert(_sample_offer())

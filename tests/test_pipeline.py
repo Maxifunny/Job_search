@@ -89,8 +89,8 @@ def test_run_aggregates_counters_and_recommendations(profile: CandidateProfile):
     assert result.rejected == 7
     assert result.skipped == 1
     assert result.recommendations == [
-        "Data Engineer @ Acme Corp — https://justjoin.it/offers/1",
-        "Data Analyst @ Acme Corp — https://justjoin.it/offers/2",
+        "Data Engineer @ Acme Corp - https://justjoin.it/offers/1",
+        "Data Analyst @ Acme Corp - https://justjoin.it/offers/2",
     ]
 
     # sync_vectors defaults to True; scrape kwargs forwarded.
@@ -157,7 +157,7 @@ def test_run_with_empty_scrape_still_matches_existing_db_offers(
     assert result.evaluated == 2
     assert result.accepted == 1
     assert result.recommendations == [
-        "Data Scientist @ Acme Corp — https://justjoin.it/offers/42"
+        "Data Scientist @ Acme Corp - https://justjoin.it/offers/42"
     ]
     mock_match.assert_called_once()
 
@@ -197,3 +197,20 @@ def test_run_no_sync_vectors_forwarded(profile: CandidateProfile):
         source="justjoin",
         sync_vectors=False,
     )
+
+
+def test_run_db_only_skips_scrape(profile: CandidateProfile):
+    with patch(
+        f"{PIPELINE_MODULE}.scrape_and_persist", return_value=[]
+    ) as mock_scrape, patch(
+        f"{PIPELINE_MODULE}.match_pending_offers",
+        return_value=MatchRunSummary(),
+    ) as mock_match:
+        JobSearchPipeline().run(
+            JobSector.DATA,
+            profile,
+            db_only=True,
+        )
+
+    mock_scrape.assert_not_called()
+    mock_match.assert_called_once()

@@ -56,6 +56,16 @@ def _sector_column_is_string(engine: Engine) -> bool:
     return "VARCHAR" in type_name or "STRING" in type_name or "TEXT" in type_name
 
 
+def _detect_schema_revision(engine: Engine) -> str:
+    """Best-effort revision detection for databases created via init-db."""
+    inspector = inspect(engine)
+    if inspector.has_table("hidden_offers"):
+        return "003_hidden_offers"
+    if _sector_column_is_string(engine):
+        return "002_sector_string"
+    return "001_initial_schema"
+
+
 def migrate_database(engine: Engine | None = None) -> None:
     """Apply Alembic migrations up to head.
 
@@ -69,10 +79,7 @@ def migrate_database(engine: Engine | None = None) -> None:
     inspector = inspect(engine)
 
     if inspector.has_table("job_offers") and not inspector.has_table("alembic_version"):
-        if _sector_column_is_string(engine):
-            command.stamp(cfg, "002_sector_string")
-        else:
-            command.stamp(cfg, "001_initial_schema")
+        command.stamp(cfg, _detect_schema_revision(engine))
 
     command.upgrade(cfg, "head")
 
