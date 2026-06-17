@@ -89,6 +89,33 @@ alembic upgrade head
 pytest tests/ -v
 ```
 
+### 5. UI (Streamlit)
+
+Interfejs demonstracyjny dla użytkowników nietechnicznych:
+
+- uruchamianie pipeline jednym kliknięciem,
+- podgląd statusu ostatniego uruchomienia,
+- tabela rekomendacji i ofert,
+- logi diagnostyczne STDOUT/STDERR.
+
+Uruchomienie (Linux/macOS):
+
+```bash
+./scripts/run_ui.sh
+```
+
+Uruchomienie (Windows PowerShell):
+
+```powershell
+.\scripts\run_ui.ps1
+```
+
+Alternatywnie:
+
+```bash
+python3 -m streamlit run ui/app.py
+```
+
 ## Schemat bazy danych (Memory)
 
 ### Tabele relacyjne
