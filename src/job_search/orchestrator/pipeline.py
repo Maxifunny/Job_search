@@ -48,6 +48,7 @@ class JobSearchPipeline:
         max_offers: int | None = None,
         max_pages: int | None = None,
         match_limit: int | None = None,
+        db_only: bool = False,
     ) -> PipelineResult:
         result = PipelineResult(sector=sector)
 
@@ -57,25 +58,29 @@ class JobSearchPipeline:
             )
 
         # --- Krok 1+2: Scrape + Store -------------------------------------
-        print("[pipeline] Krok 1/3: Scrapowanie ofert...")
-        scrape_kwargs: dict[str, int] = {}
-        if max_offers is not None:
-            scrape_kwargs["max_offers"] = max_offers
-        if max_pages is not None:
-            scrape_kwargs["max_pages"] = max_pages
-
-        try:
-            scrape_summaries = scrape_and_persist(
-                sector,
-                source=source,
-                sync_vectors=sync_vectors,
-                **scrape_kwargs,
-            )
-        except Exception as exc:  # pragma: no cover - defensive guard
-            message = f"Scrape failed: {exc}"
-            print(f"[pipeline] {message}")
-            result.scrape_errors.append(message)
+        if db_only:
+            print("[pipeline] Krok 1/3: Pomijam scrapowanie (--db-only).")
             scrape_summaries = []
+        else:
+            print("[pipeline] Krok 1/3: Scrapowanie ofert...")
+            scrape_kwargs: dict[str, int] = {}
+            if max_offers is not None:
+                scrape_kwargs["max_offers"] = max_offers
+            if max_pages is not None:
+                scrape_kwargs["max_pages"] = max_pages
+
+            try:
+                scrape_summaries = scrape_and_persist(
+                    sector,
+                    source=source,
+                    sync_vectors=sync_vectors,
+                    **scrape_kwargs,
+                )
+            except Exception as exc:  # pragma: no cover - defensive guard
+                message = f"Scrape failed: {exc}"
+                print(f"[pipeline] {message}")
+                result.scrape_errors.append(message)
+                scrape_summaries = []
 
         for summary in scrape_summaries:
             result.scraped += summary.offers_found
@@ -117,7 +122,7 @@ class JobSearchPipeline:
         for outcome in match_summary.accepted_outcomes:
             offer = outcome.offer
             result.recommendations.append(
-                f"{offer.title} @ {offer.company} — {offer.url}"
+                f"{offer.title} @ {offer.company} - {offer.url}"
             )
 
         print(

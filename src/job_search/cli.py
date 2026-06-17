@@ -1,11 +1,17 @@
 """CLI entry point for the job search system."""
 
 import argparse
+import sys
 from pathlib import Path
 
 from config.sector_loader import SectorConfigError, list_sector_ids, resolve_sector
-from job_search.matching.service import load_profile, match_pending_offers
-from job_search.memory.database import init_database, migrate_database
+from job_search.matching.service import (
+    list_recent_recommendations,
+    load_profile,
+    match_pending_offers,
+)
+from job_search.memory.database import get_session, init_database, migrate_database
+from job_search.memory.repositories import JobOfferRepository
 from job_search.orchestrator import JobSearchPipeline
 from job_search.schemas.job_offer import JobSector, coerce_sector_id
 from job_search.scrapers import list_sources, scrape_and_persist
@@ -110,11 +116,38 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_false",
         help="Skip ChromaDB embeddings during scrape (debug only)",
     )
+    run.add_argument(
+        "--db-only",
+        action="store_true",
+        help="Skip scraping and run matching only on offers already in database",
+    )
+    run.add_argument(
+        "--history-limit",
+        type=int,
+        default=10,
+        help="How many previously recommended offers to print after run (default: 10)",
+    )
     run.set_defaults(sync_vectors=True)
+
+    hide = sub.add_parser(
+        "hide-offer",
+        help="Hide an offer for a candidate so it is skipped in future matching",
+    )
+    hide.add_argument(
+        "--profile",
+        default="config/profiles/default.json",
+        help="Path to candidate profile JSON (default: config/profiles/default.json)",
+    )
+    hide.add_argument("--offer-id", type=int, help="Internal job_offer id from SQLite")
+    hide.add_argument("--url", help="Offer URL to hide")
+    hide.add_argument("--reason", help="Optional reason why the offer was hidden")
 
     schedule = sub.add_parser(
         "schedule",
-        help="Print PowerShell commands to register a Windows Scheduled Task (documentation helper)",
+        help=(
+            "Print PowerShell commands to register a Windows Scheduled Task "
+            "(documentation helper)"
+        ),
     )
     schedule.add_argument(
         "--sector",
@@ -169,6 +202,16 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _safe_print(text: str) -> None:
+    """Print without crashing on legacy Windows consoles (cp1250/cp1252)."""
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        encoding = sys.stdout.encoding or "utf-8"
+        fallback = text.encode(encoding, errors="replace").decode(encoding, errors="replace")
+        print(fallback)
+
+
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
@@ -213,7 +256,7 @@ def main() -> None:
         for outcome in summary.accepted_outcomes:
             print(
                 f"ACCEPTED: {outcome.offer.title} @ {outcome.offer.company} "
-                f"→ {outcome.offer.url}"
+                f"-> {outcome.offer.url}"
             )
     elif args.command == "run":
         sector = args.sector
@@ -228,6 +271,7 @@ def main() -> None:
                 max_offers=args.max_offers,
                 max_pages=args.max_pages,
                 match_limit=args.match_limit,
+                db_only=args.db_only,
             )
         except KeyboardInterrupt:
             print("\n[pipeline] Przerwano pipeline.")
@@ -236,9 +280,19 @@ def main() -> None:
         print(f"\n=== REKOMENDACJE ({len(result.recommendations)}) ===")
         if result.recommendations:
             for recommendation in result.recommendations:
-                print(f"✅ {recommendation}")
+                _safe_print(f"[OK] {recommendation}")
         else:
             print("Brak nowych rekomendacji dla tego profilu.")
+
+        historical = list_recent_recommendations(
+            profile.name,
+            sector=sector.value,
+            limit=max(0, args.history_limit),
+        )
+        if historical:
+            print(f"\n=== OSTATNIE REKOMENDACJE Z BAZY ({len(historical)}) ===")
+            for row in historical:
+                _safe_print(f"[id={row.offer_id}] {row.title} @ {row.company} - {row.url}")
 
         if result.scrape_errors:
             print(f"\n[pipeline] Błędy scrapera ({len(result.scrape_errors)}):")
@@ -248,6 +302,21 @@ def main() -> None:
             print(f"\n[pipeline] Błędy ({len(result.errors)}):")
             for error in result.errors:
                 print(f"  - {error}")
+    elif args.command == "hide-offer":
+        if not args.offer_id and not args.url:
+            parser.error("hide-offer requires --offer-id or --url")
+        profile = load_profile(Path(args.profile))
+        with get_session() as session:
+            repo = JobOfferRepository(session)
+            offer = repo.get_by_id(args.offer_id) if args.offer_id else repo.get_by_url(args.url)
+            if offer is None:
+                print("[hide-offer] Nie znaleziono oferty.")
+                return
+            repo.hide_offer(offer.id, profile.name, reason=args.reason)
+            print(
+                f"[hide-offer] Ukryto ofertę id={offer.id} "
+                f"({offer.title} @ {offer.company}) dla profilu '{profile.name}'."
+            )
     elif args.command == "schedule":
         profile = args.profile.replace("/", "\\")
         sync_flag = " -SyncVectors" if args.sync_vectors else ""
@@ -273,7 +342,10 @@ def main() -> None:
             f"{sync_flag}"
         )
         print("\n# Odinstalowanie:")
-        print(f".\\scripts\\windows\\register_scheduled_task.ps1 -Unregister -TaskName {args.task_name}")
+        print(
+            ".\\scripts\\windows\\register_scheduled_task.ps1 "
+            f"-Unregister -TaskName {args.task_name}"
+        )
     else:
         parser.print_help()
 

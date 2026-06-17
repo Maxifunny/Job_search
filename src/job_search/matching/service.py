@@ -6,10 +6,11 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from config.settings import get_settings
-from job_search.matching.engine import MatchOutcome, MatchingEngine
+from job_search.matching.engine import MatchingEngine, MatchOutcome
 from job_search.matching.llm_evaluator import LLMEvaluator
 from job_search.matching.semantic_matcher import SemanticMatcher
 from job_search.memory.database import create_db_engine
@@ -27,6 +28,17 @@ class MatchRunSummary:
     rejected: int = 0
     skipped: int = 0
     accepted_outcomes: list[MatchOutcome] = field(default_factory=list)
+
+
+@dataclass
+class RecommendationRow:
+    offer_id: int
+    title: str
+    company: str
+    source: str
+    sector: str
+    url: str
+    recommended_at: object
 
 
 def load_profile(profile_path: Path) -> CandidateProfile:
@@ -127,3 +139,49 @@ def match_pending_offers(
             session.close()
 
     return summary
+
+
+def list_recent_recommendations(
+    candidate_name: str,
+    *,
+    sector: str | None = None,
+    limit: int = 20,
+    session: Session | None = None,
+) -> list[RecommendationRow]:
+    """Return recent recommendations for a candidate, newest first."""
+    from job_search.memory.models import Recommendation
+
+    owns_session = session is None
+    if owns_session:
+        engine = create_db_engine(get_settings().database_url)
+        session_factory = sessionmaker(bind=engine)
+        session = session_factory()
+
+    try:
+        stmt = (
+            select(Recommendation, JobOffer)
+            .join(JobOffer, JobOffer.id == Recommendation.job_offer_id)
+            .where(Recommendation.candidate_name == candidate_name)
+            .order_by(Recommendation.recommended_at.desc())
+            .limit(limit)
+        )
+        if sector is not None:
+            stmt = stmt.where(JobOffer.sector == sector)
+
+        rows: list[RecommendationRow] = []
+        for recommendation, offer in session.execute(stmt).all():
+            rows.append(
+                RecommendationRow(
+                    offer_id=offer.id,
+                    title=offer.title,
+                    company=offer.company,
+                    source=offer.source,
+                    sector=offer.sector,
+                    url=offer.url,
+                    recommended_at=recommendation.recommended_at,
+                )
+            )
+        return rows
+    finally:
+        if owns_session and session is not None:
+            session.close()

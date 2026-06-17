@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from job_search.memory.embeddings import EmbeddingService, build_offer_document
 from job_search.memory.models import (
+    HiddenOffer,
     JobOffer,
     MatchDecisionEnum,
     MatchResult,
@@ -59,6 +60,13 @@ class JobOfferRepository:
         stmt = select(JobOffer).where(
             JobOffer.source == source, JobOffer.external_id == external_id
         )
+        return self.session.scalar(stmt)
+
+    def get_by_id(self, offer_id: int) -> JobOffer | None:
+        return self.session.get(JobOffer, offer_id)
+
+    def get_by_url(self, url: str) -> JobOffer | None:
+        stmt = select(JobOffer).where(JobOffer.url == url)
         return self.session.scalar(stmt)
 
     def upsert(self, offer: JobOfferCreate) -> tuple[JobOffer, bool]:
@@ -157,12 +165,18 @@ class JobOfferRepository:
             .where(MatchResult.candidate_name == candidate_name)
             .scalar_subquery()
         )
+        hidden_ids = (
+            select(HiddenOffer.job_offer_id)
+            .where(HiddenOffer.candidate_name == candidate_name)
+            .scalar_subquery()
+        )
         stmt = (
             select(JobOffer)
             .where(
                 JobOffer.sector == sector,
                 JobOffer.is_active.is_(True),
                 JobOffer.id.not_in(matched_ids),
+                JobOffer.id.not_in(hidden_ids),
             )
             .order_by(JobOffer.last_seen_at.desc())
         )
@@ -192,6 +206,40 @@ class JobOfferRepository:
         self.session.add(recommendation)
         self.session.flush()
         return recommendation
+
+    def hide_offer(
+        self,
+        job_offer_id: int,
+        candidate_name: str,
+        reason: str | None = None,
+    ) -> HiddenOffer:
+        existing = self.session.scalar(
+            select(HiddenOffer).where(
+                HiddenOffer.job_offer_id == job_offer_id,
+                HiddenOffer.candidate_name == candidate_name,
+            )
+        )
+        if existing:
+            if reason:
+                existing.reason = reason
+            self.session.flush()
+            return existing
+
+        hidden = HiddenOffer(
+            job_offer_id=job_offer_id,
+            candidate_name=candidate_name,
+            reason=reason,
+        )
+        self.session.add(hidden)
+        self.session.flush()
+        return hidden
+
+    def is_hidden(self, job_offer_id: int, candidate_name: str) -> bool:
+        stmt = select(HiddenOffer.id).where(
+            HiddenOffer.job_offer_id == job_offer_id,
+            HiddenOffer.candidate_name == candidate_name,
+        )
+        return self.session.scalar(stmt) is not None
 
     def deactivate_stale_offers(
         self,
