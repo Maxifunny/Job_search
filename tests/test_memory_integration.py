@@ -246,3 +246,55 @@ def test_embedding_cache_avoids_duplicate_api_calls(db_session: Session):
 
     assert first == second
     mock_client.embeddings.create.assert_called_once()
+
+
+def test_embedding_logs_quota_from_raw_response_headers(db_session: Session, caplog):
+    parsed_response = MagicMock(
+        data=[MagicMock(embedding=[0.1, 0.2, 0.3])],
+        usage=MagicMock(prompt_tokens=12, total_tokens=12),
+    )
+    raw_response = MagicMock(
+        headers={
+            "x-ratelimit-remaining-requests": "111",
+            "x-ratelimit-remaining-tokens": "150000",
+        }
+    )
+    raw_response.parse.return_value = parsed_response
+
+    mock_client = MagicMock()
+    mock_client.embeddings.with_raw_response.create.return_value = raw_response
+    service = EmbeddingService(
+        session=db_session,
+        client=mock_client,
+        settings=Settings(LLM_API_KEY="sk-test-0007", LOG_API_QUOTA=True),
+    )
+
+    with caplog.at_level("INFO"):
+        service.embed_text("quota logs test")
+
+    assert any("api_usage endpoint=embeddings.create" in rec.message for rec in caplog.records)
+    assert any("remaining(requests=111,tokens=150000)" in rec.message for rec in caplog.records)
+    assert any("key=***0007" in rec.message for rec in caplog.records)
+
+
+def test_embedding_logs_provider_quota_fallback_without_headers(
+    db_session: Session, caplog
+):
+    mock_client = MagicMock()
+    mock_client.embeddings.create.return_value = MagicMock(
+        data=[MagicMock(embedding=[0.5, 0.6, 0.7])],
+        usage=MagicMock(prompt_tokens=5, total_tokens=5),
+    )
+    service = EmbeddingService(
+        session=db_session,
+        client=mock_client,
+        settings=Settings(LLM_API_KEY="sk-test-1111", LOG_API_QUOTA=True),
+    )
+
+    with caplog.at_level("INFO"):
+        service.embed_text("fallback quota logs test")
+
+    assert any(
+        "remaining_quota=not_exposed_by_provider" in rec.message
+        for rec in caplog.records
+    )

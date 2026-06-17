@@ -88,3 +88,89 @@ def test_evaluate_without_api_key_returns_dev_mode_result(
     assert result.is_relevant_role is False
     assert "LLM_API_KEY" in result.explanation
     assert any("LLM_API_KEY" in record.message for record in caplog.records)
+
+
+def test_evaluate_logs_quota_from_raw_response_headers(profile, offer, caplog):
+    parsed_response = MagicMock(
+        choices=[
+            MagicMock(
+                message=MagicMock(
+                    content=(
+                        '{"score": 0.75, "confidence": 0.8, '
+                        '"is_relevant_role": true, '
+                        '"matched_skills": ["Python"], '
+                        '"missing_skills": [], '
+                        '"explanation": "OK"}'
+                    )
+                )
+            )
+        ],
+        usage=MagicMock(prompt_tokens=120, completion_tokens=80, total_tokens=200),
+    )
+    raw_response = MagicMock(
+        headers={
+            "x-ratelimit-limit-requests": "500",
+            "x-ratelimit-remaining-requests": "321",
+            "x-ratelimit-reset-requests": "12s",
+            "x-ratelimit-limit-tokens": "200000",
+            "x-ratelimit-remaining-tokens": "180000",
+            "x-ratelimit-reset-tokens": "12s",
+        }
+    )
+    raw_response.parse.return_value = parsed_response
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.with_raw_response.create.return_value = raw_response
+    evaluator = LLMEvaluator(
+        settings=Settings(
+            LLM_API_KEY="sk-test-1234",
+            LLM_MODEL="test-model",
+            LOG_API_QUOTA=True,
+        ),
+        client=mock_client,
+    )
+
+    with caplog.at_level("INFO"):
+        result = evaluator.evaluate(offer, profile)
+
+    assert result.score == pytest.approx(0.75)
+    assert any("api_usage endpoint=chat.completions" in rec.message for rec in caplog.records)
+    assert any("remaining(requests=321,tokens=180000)" in rec.message for rec in caplog.records)
+    assert any("key=***1234" in rec.message for rec in caplog.records)
+    mock_client.chat.completions.with_raw_response.create.assert_called_once()
+
+
+def test_evaluate_logs_quota_fallback_when_headers_missing(profile, offer, caplog):
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = MagicMock(
+        choices=[
+            MagicMock(
+                message=MagicMock(
+                    content=(
+                        '{"score": 0.61, "confidence": 0.62, '
+                        '"is_relevant_role": false, '
+                        '"matched_skills": [], '
+                        '"missing_skills": ["SQL"], '
+                        '"explanation": "Brak dopasowania"}'
+                    )
+                )
+            )
+        ],
+        usage=MagicMock(prompt_tokens=50, completion_tokens=20, total_tokens=70),
+    )
+    evaluator = LLMEvaluator(
+        settings=Settings(
+            LLM_API_KEY="sk-test-9999",
+            LLM_MODEL="test-model",
+            LOG_API_QUOTA=True,
+        ),
+        client=mock_client,
+    )
+
+    with caplog.at_level("INFO"):
+        evaluator.evaluate(offer, profile)
+
+    assert any(
+        "remaining_quota=not_exposed_by_provider" in rec.message
+        for rec in caplog.records
+    )

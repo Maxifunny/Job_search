@@ -310,6 +310,26 @@ python -m job_search.cli schedule --sector data --profile config/profiles/defaul
 
 Pełna lista: [.env.example](.env.example) · Gemini: [.env.gemini.example](.env.gemini.example)
 
+## API quota / usage logs (OpenAI-compatible)
+
+Jeśli `LOG_API_QUOTA=true`, aplikacja loguje przy wywołaniach `chat.completions` i
+`embeddings.create`:
+
+- model,
+- usage tokenów (`prompt/completion/total`, jeżeli provider zwraca),
+- rate-limit headers (`x-ratelimit-remaining-requests`,
+  `x-ratelimit-remaining-tokens`, oraz limity/reset, jeżeli dostępne).
+
+Przykładowa linia:
+
+```text
+api_usage endpoint=chat.completions model=gpt-4o-mini key=***1234 tokens(prompt=120,completion=80,total=200) remaining(requests=321,tokens=180000) limits(requests=500,tokens=200000) reset(requests=12s,tokens=12s)
+```
+
+Niektórzy providerzy (w tym część endpointów Gemini/OpenAI-compatible) nie zwracają
+nagłówków pozostałego limitu; wtedy log pokaże:
+`remaining_quota=not_exposed_by_provider`.
+
 ## Status projektu
 
 | Moduł | Status |
