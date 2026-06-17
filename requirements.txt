@@ -24,6 +24,7 @@ selenium>=4.21.0
 python-dotenv>=1.0.1
 tenacity>=8.3.0
 structlog>=24.2.0
+streamlit
 
 # Testing
 pytest>=8.2.0
