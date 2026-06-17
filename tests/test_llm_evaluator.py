@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
+from openai import APIStatusError
 
 from config.settings import Settings
 from job_search.matching.llm_evaluator import LLMEvaluator
@@ -138,6 +139,59 @@ def test_evaluate_logs_quota_from_raw_response_headers(profile, offer, caplog):
     assert any("remaining(requests=321,tokens=180000)" in rec.message for rec in caplog.records)
     assert any("key=***1234" in rec.message for rec in caplog.records)
     mock_client.chat.completions.with_raw_response.create.assert_called_once()
+
+
+def test_evaluate_falls_back_to_next_model_on_503(profile, offer, caplog, monkeypatch):
+    monkeypatch.setattr("job_search.llm.model_fallback.time.sleep", lambda _s: None)
+
+    primary_error = APIStatusError(
+        "high demand",
+        response=MagicMock(status_code=503),
+        body={"error": {"code": 503, "status": "UNAVAILABLE"}},
+    )
+
+    def _create_side_effect(**kwargs):
+        model = kwargs.get("model")
+        if model == "primary-model":
+            raise primary_error
+        return MagicMock(
+            choices=[
+                MagicMock(
+                    message=MagicMock(
+                        content=(
+                            '{"score": 0.7, "confidence": 0.75, '
+                            '"is_relevant_role": true, '
+                            '"matched_skills": ["Python"], '
+                            '"missing_skills": [], '
+                            '"explanation": "Fallback OK"}'
+                        )
+                    )
+                )
+            ],
+            usage=MagicMock(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+        )
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = _create_side_effect
+    del mock_client.chat.completions.with_raw_response
+
+    evaluator = LLMEvaluator(
+        settings=Settings(
+            LLM_API_KEY="sk-test",
+            LLM_MODEL="primary-model",
+            LLM_FALLBACK_MODELS="backup-model",
+            LLM_RETRY_ATTEMPTS=1,
+            LOG_API_QUOTA=False,
+        ),
+        client=mock_client,
+    )
+
+    with caplog.at_level("WARNING"):
+        result = evaluator.evaluate(offer, profile)
+
+    assert result.confidence == pytest.approx(0.75)
+    assert evaluator.last_model_used == "backup-model"
+    assert any("switching to next model" in rec.message for rec in caplog.records)
 
 
 def test_evaluate_logs_quota_fallback_when_headers_missing(profile, offer, caplog):

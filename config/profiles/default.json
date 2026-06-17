@@ -29,7 +29,7 @@
     "Power BI",
     "Tableau"
   ],
-  "preferred_locations": ["Warszawa", "Kraków", "Wrocław", "Remote"],
+  "preferred_locations": ["Warszawa", "Kraków", "Wrocław", "Gdańsk", "Remote"],
   "min_salary": null,
   "remote_only": false,
   "excluded_keywords": [

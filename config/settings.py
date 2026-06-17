@@ -42,9 +42,15 @@ class Settings(BaseSettings):
         alias="LLM_BASE_URL",
     )
     llm_model: str = Field(default="gpt-4o-mini", alias="LLM_MODEL")
+    llm_fallback_models: list[str] = Field(default_factory=list, alias="LLM_FALLBACK_MODELS")
+    llm_retry_attempts: int = Field(default=2, alias="LLM_RETRY_ATTEMPTS")
     embedding_model: str = Field(
         default="text-embedding-3-small",
         alias="EMBEDDING_MODEL",
+    )
+    embedding_fallback_models: list[str] = Field(
+        default_factory=list,
+        alias="EMBEDDING_FALLBACK_MODELS",
     )
     log_api_quota: bool = Field(default=True, alias="LOG_API_QUOTA")
 
@@ -85,6 +91,17 @@ class Settings(BaseSettings):
         default=30,
         alias="SCRAPER_MAX_OFFERS_PER_QUERY",
     )
+
+    @field_validator("llm_fallback_models", "embedding_fallback_models", mode="before")
+    @classmethod
+    def _parse_model_list(cls, value: object) -> list[str]:
+        if value is None or value == "":
+            return []
+        if isinstance(value, str):
+            return [part.strip() for part in value.split(",") if part.strip()]
+        if isinstance(value, list):
+            return [str(part).strip() for part in value if str(part).strip()]
+        return []
 
 
 @lru_cache
