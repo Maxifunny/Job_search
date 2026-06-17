@@ -5,7 +5,7 @@ from pathlib import Path
 
 from config.sector_loader import SectorConfigError, list_sector_ids, resolve_sector
 from job_search.matching.service import load_profile, match_pending_offers
-from job_search.memory.database import init_database
+from job_search.memory.database import init_database, migrate_database
 from job_search.orchestrator import JobSearchPipeline
 from job_search.schemas.job_offer import JobSector, coerce_sector_id
 from job_search.scrapers import list_sources, scrape_and_persist
@@ -27,6 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("init-db", help="Initialize SQLite/PostgreSQL schema")
+    sub.add_parser("migrate", help="Apply Alembic database migrations (upgrade head)")
 
     sub.add_parser(
         "list-sectors",
@@ -175,6 +176,9 @@ def main() -> None:
     if args.command == "init-db":
         init_database()
         print("Database initialized.")
+    elif args.command == "migrate":
+        migrate_database()
+        print("Database migrations applied (alembic upgrade head).")
     elif args.command == "list-sectors":
         for sector_id in list_sector_ids():
             config = resolve_sector(sector_id)

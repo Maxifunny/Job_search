@@ -73,6 +73,16 @@ python scripts/init_db.py
 python -m job_search.cli init-db
 ```
 
+Po aktualizacji projektu (np. konfigurowalne sektory) uruchom migracje:
+
+```bash
+python -m job_search.cli migrate
+# lub z katalogu głównego repozytorium:
+alembic upgrade head
+```
+
+> **Uwaga:** `alembic upgrade head` działa tylko z **katalogu głównego** projektu (tam jest `alembic.ini`). Komenda bez `-c migrations/alembic.ini` wcześniej kończyła się błędem `No 'script_location' key found`.
+
 ### 4. Testy
 
 ```bash
