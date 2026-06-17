@@ -27,15 +27,24 @@ def list_sectors_for_ui() -> list[tuple[str, str]]:
     return sectors
 
 
-def list_profiles_for_ui() -> list[str]:
-    """Return profile json paths relative to repository root."""
+def _profile_label_from_path(relative_path: str) -> str:
+    """Create a friendly profile label from profile file name."""
+    name = Path(relative_path).stem.replace("_", " ").replace("-", " ").strip()
+    if not name:
+        return relative_path
+    return name[:1].upper() + name[1:]
+
+
+def list_profiles_for_ui() -> list[tuple[str, str]]:
+    """Return profiles as (path, friendly_label) pairs."""
     profiles_dir = get_repo_root() / "config" / "profiles"
     if not profiles_dir.is_dir():
         return []
-    return sorted(
-        str(path.relative_to(get_repo_root())).replace("\\", "/")
-        for path in profiles_dir.glob("*.json")
-    )
+    items: list[tuple[str, str]] = []
+    for path in sorted(profiles_dir.glob("*.json")):
+        relative_path = str(path.relative_to(get_repo_root())).replace("\\", "/")
+        items.append((relative_path, _profile_label_from_path(relative_path)))
+    return items
 
 
 def detect_env_status() -> tuple[bool, bool]:
@@ -194,6 +203,7 @@ def fetch_recommendations(
             AND m1.evaluated_at = m2.max_evaluated
         )
         SELECT
+            o.id AS offer_id,
             r.recommended_at,
             r.candidate_name,
             o.source,
@@ -240,6 +250,7 @@ def fetch_offers(
         db_path,
         f"""
         SELECT
+            id AS offer_id,
             last_seen_at,
             sector,
             source,

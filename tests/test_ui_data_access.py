@@ -10,6 +10,7 @@ from ui.data_access import (
     fetch_latest_status,
     fetch_offers,
     fetch_recommendations,
+    list_profiles_for_ui,
 )
 
 
@@ -126,6 +127,7 @@ def test_fetch_recommendations_returns_joined_rows(tmp_path: Path):
     rows = fetch_recommendations(db_path, sector="data", source="justjoin")
 
     assert len(rows) == 1
+    assert rows[0]["offer_id"] == 1
     assert rows[0]["company"] == "Acme"
     assert rows[0]["decision"] == "accepted"
 
@@ -137,4 +139,20 @@ def test_fetch_offers_applies_filters(tmp_path: Path):
     rows = fetch_offers(db_path, source="linkedin")
 
     assert len(rows) == 1
+    assert rows[0]["offer_id"] == 2
     assert rows[0]["title"] == "Automation Engineer"
+
+
+def test_list_profiles_for_ui_returns_friendly_labels(tmp_path: Path, monkeypatch):
+    profiles_dir = tmp_path / "config" / "profiles"
+    profiles_dir.mkdir(parents=True)
+    (profiles_dir / "default.json").write_text("{}", encoding="utf-8")
+    (profiles_dir / "senior_data_engineer.json").write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr("ui.data_access.get_repo_root", lambda: tmp_path)
+
+    profiles = list_profiles_for_ui()
+    assert profiles == [
+        ("config/profiles/default.json", "Default"),
+        ("config/profiles/senior_data_engineer.json", "Senior data engineer"),
+    ]
