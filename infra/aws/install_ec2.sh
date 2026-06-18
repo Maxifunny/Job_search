@@ -57,13 +57,32 @@ log "init-db + migrate..."
 python -m job_search.cli init-db || true
 python -m job_search.cli migrate
 
+chmod +x infra/aws/run_daily_pipeline.sh infra/aws/setup_eventbridge.sh 2>/dev/null || true
+
+# SSM Agent (wymagany do EventBridge → Lambda → SSM)
+if command -v amazon-ssm-agent >/dev/null 2>&1; then
+  log "SSM Agent: zainstalowany"
+elif command -v snap >/dev/null 2>&1; then
+  log "Instalacja SSM Agent (snap)..."
+  sudo snap install amazon-ssm-agent --classic || true
+  sudo systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service || true
+  sudo systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service || true
+else
+  log "UWAGA: Zainstaluj SSM Agent — wymagany do harmonogramu EventBridge."
+  log "  Na EC2 przy tworzeniu instancji dołącz IAM role: AmazonSSMManagedInstanceCore"
+fi
+
 chmod +x infra/aws/run_daily_pipeline.sh
 
 log ""
-log "=== Następny krok: cron (raz dziennie) ==="
-log "  crontab -e"
-log "  Wklej zawartość pliku: infra/aws/crontab.example"
+log "=== Następny krok: EventBridge (raz dziennie, free tier) ==="
+log "  Na laptopie (z AWS CLI):"
+log "    export AWS_REGION=eu-central-1"
+log "    export EC2_INSTANCE_ID=i-..."
+log "    ./infra/aws/setup_eventbridge.sh"
 log ""
-log "Test ręczny:"
+log "  Alternatywa: cron — infra/aws/crontab.example"
+log ""
+log "Test ręczny na EC2:"
 log "  ./infra/aws/run_daily_pipeline.sh"
 log "  tail -f logs/latest.log"

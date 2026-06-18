@@ -1,6 +1,8 @@
-# Job Search — harmonogram cron (RAZ NA DZIEN)
+# Job Search — harmonogram cron (ALTERNATYWA — preferuj EventBridge)
 #
-# Instalacja:
+# Zalecane: infra/aws/setup_eventbridge.sh (EventBridge Scheduler, free tier)
+#
+# Jeśli jednak wolisz cron na EC2:
 #   crontab -e
 #   Wklej poniższe linie (dostosuj ścieżkę użytkownika i repo).
 #

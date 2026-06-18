@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Codzienny pipeline Job Search (scrape → match → email).
-# Uruchamiany przez cron RAZ na dzień — patrz crontab.example.
+# Uruchamiany przez EventBridge Scheduler (Lambda → SSM) lub ręcznie.
 #
 # Użycie ręczne:
 #   ./infra/aws/run_daily_pipeline.sh
@@ -51,6 +51,8 @@ MATCH_LIMIT="${JOB_SEARCH_MATCH_LIMIT:-20}"
 
 log "Sector=$SECTOR Profile=$PROFILE Source=$SOURCE MaxOffers=$MAX_OFFERS MatchLimit=$MATCH_LIMIT"
 log "NOTIFIER_ENABLED=${NOTIFIER_ENABLED:-false}"
+
+chmod +x "$REPO_ROOT/infra/aws/run_daily_pipeline.sh" 2>/dev/null || true
 
 log "migrate..."
 "$VENV_PYTHON" -m job_search.cli migrate

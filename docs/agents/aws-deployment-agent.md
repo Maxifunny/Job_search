@@ -1,4 +1,4 @@
-# AWS Deployment Agent — EC2 + cron raz dziennie
+# AWS Deployment Agent — EventBridge + EC2 (raz dziennie, free tier)
 
 **Branch:** `cursor/aws-daily-cron-503f`  
 **Pliki:** `infra/aws/*`, `docs/agents/aws-deployment-agent.md`
@@ -7,206 +7,216 @@
 
 ## Cel
 
-Uruchomić **cały pipeline** (scrape → match → email) na AWS **raz na dobę** przez **cron na EC2**.
+Uruchomić **cały pipeline** (scrape → match → email) **raz na dobę** przez **EventBridge Scheduler** — bez crona na serwerze.
 
-Harmonogram jest po stronie **infrastruktury** (cron), nie w kodzie aplikacji. Jeśli uruchomisz `run` ręcznie drugi raz tego samego dnia, mail może pójść ponownie — w produkcji używaj wyłącznie cron.
+```
+EventBridge Scheduler (8:00 PL)
+    → Lambda (darmowe, 1×/dzień)
+        → SSM Run Command (darmowe)
+            → EC2: run_daily_pipeline.sh
+                → cli run + NOTIFIER
+```
 
----
-
-## Dlaczego EC2, a nie Lambda?
-
-| Opcja | Werdykt |
-|-------|---------|
-| **EC2 + cron** | Najprostsze: SQLite, Chroma, scraping, ten sam kod co lokalnie |
-| Lambda | Zły fit: timeout, brak trwałego dysku, ciężki deployment |
-| ECS | Za wcześnie na jednego użytkownika |
+Harmonogram jest po stronie **AWS (EventBridge)**, nie w kodzie aplikacji.
 
 ---
 
-## Architektura (free tier)
+## Koszty (free tier — ~0 zł)
+
+| Usługa | Wywołania | Free tier |
+|--------|-----------|-----------|
+| **EventBridge Scheduler** | 1×/dzień | 14 mln/mies. — **$0** |
+| **Lambda** | 1×/dzień | 1 mln/mies. — **$0** |
+| **SSM Run Command** | 1×/dzień | standard — **$0** |
+| **EC2 t3.micro** | 24/7 | 750 h/mies. przez 12 mies. — **$0** |
+| **SES** (email) | kilka/dzień | 62k/mies. z EC2 — **$0** |
+| **CloudWatch Logs** | mało | 5 GB/mies. — **$0** |
+
+> Po 12 miesiącach EC2 może kosztować ~8 USD/mies. — wtedy rozważ zatrzymywanie instancji poza runem (zaawansowane).
+
+---
+
+## Dlaczego EventBridge, a nie cron?
+
+| | EventBridge + Lambda + SSM | cron na EC2 |
+|--|---------------------------|-------------|
+| Harmonogram w AWS Console | tak | nie (SSH + crontab) |
+| Free tier | tak | tak |
+| EC2 musi działać 24/7 | tak (na MVP) | tak |
+| Zalecane | **tak** | zapasowe |
+
+---
+
+## Architektura
 
 ```mermaid
 flowchart LR
-    CRON[cron 08:00 Europe/Warsaw] --> SCRIPT[run_daily_pipeline.sh]
+    EB[EventBridge Scheduler 08:00] --> L[Lambda trigger]
+    L --> SSM[SSM SendCommand]
+    SSM --> EC2[EC2 Ubuntu]
+    EC2 --> SCRIPT[run_daily_pipeline.sh]
     SCRIPT --> RUN[cli run]
-    RUN --> DB[(SQLite + Chroma na EBS)]
-    RUN --> LLM[Gemini API]
+    RUN --> DB[(SQLite + Chroma)]
     RUN --> MAIL[SMTP / SES]
-    SCRIPT --> LOGS[logs/latest.log]
-    LOGS --> CW[CloudWatch Agent opcjonalnie]
 ```
 
 ---
 
 ## Krok 1 — Konto AWS
 
-1. Załóż konto na [https://aws.amazon.com](https://aws.amazon.com)
-2. Włącz **MFA** na root / użytkowniku IAM
-3. Utwórz użytkownika IAM z programowym dostępem (do SSH użyjesz klucza EC2, nie IAM API na start)
+1. Konto na [https://aws.amazon.com](https://aws.amazon.com)
+2. MFA na użytkowniku IAM
+3. Lokalnie: `aws configure` (Access Key + region `eu-central-1`)
 
 ---
 
-## Krok 2 — Uruchom instancję EC2 (free tier)
+## Krok 2 — EC2 z rolą SSM (free tier)
 
-1. Konsola AWS → **EC2** → **Launch instance**
+1. **EC2** → **Launch instance**
 2. Ustawienia:
    - **Name:** `job-search`
-   - **AMI:** Ubuntu Server 22.04 LTS (lub Amazon Linux 2023)
-   - **Instance type:** `t3.micro` lub `t2.micro` (Free tier eligible)
-   - **Key pair:** utwórz i pobierz `.pem`
-   - **Storage:** 20–30 GB gp3 (Free tier: 30 GB)
-3. **Security group:**
-   - SSH (22) — tylko **Twój IP** (nie 0.0.0.0/0 na stałe)
-   - Brak portu 8501 publicznie (UI na razie lokalnie / SSH tunnel)
-4. Launch
+   - **AMI:** Ubuntu 22.04 LTS
+   - **Type:** `t3.micro` (Free tier)
+   - **Key pair:** `.pem` do SSH
+   - **IAM instance profile:** utwórz rolę z policy **`AmazonSSMManagedInstanceCore`**
+     - EC2 → Launch → Advanced → IAM instance profile → Create new role → SSM → `AmazonSSMManagedInstanceCore`
+3. **Security group:** SSH (22) tylko z Twojego IP
+4. **Storage:** 20–30 GB
+5. Launch → zapisz **Instance ID** (`i-0abc123...`)
 
----
-
-## Krok 3 — Połączenie SSH
+Sprawdź SSM (z laptopa, po 2–5 min):
 
 ```bash
-chmod 400 job-search.pem
-ssh -i job-search.pem ubuntu@<PUBLIC_IP_EC2>
+aws ssm describe-instance-information \
+  --query 'InstanceInformationList[?PingStatus==`Online`].[InstanceId,ComputerName]' \
+  --output table
 ```
 
-Amazon Linux: użytkownik `ec2-user`.
+Instancja musi być **Online** w SSM.
 
 ---
 
-## Krok 4 — Klon repozytorium
+## Krok 3 — Instalacja aplikacji na EC2
 
 ```bash
-sudo apt-get update && sudo apt-get install -y git
+ssh -i job-search.pem ubuntu@<EC2_IP>
+
 git clone https://github.com/Maxifunny/Job_search.git
 cd Job_search
-git checkout cursor/aws-daily-cron-503f   # lub main po merge PR
+cp infra/aws/env.ec2.example .env
+nano .env   # LLM_API_KEY, SMTP, NOTIFIER_SECRET, NOTIFIER_ENABLED=true
+
+chmod +x infra/aws/install_ec2.sh infra/aws/run_daily_pipeline.sh
+./infra/aws/install_ec2.sh
+
+# Test ręczny na EC2:
+./infra/aws/run_daily_pipeline.sh
+tail -50 logs/latest.log
 ```
 
 ---
 
-## Krok 5 — Instalacja aplikacji
+## Krok 4 — EventBridge Scheduler (raz dziennie)
+
+**Na laptopie** (nie na EC2), z AWS CLI:
 
 ```bash
-chmod +x infra/aws/install_ec2.sh infra/aws/run_daily_pipeline.sh
-cp infra/aws/env.ec2.example .env
-nano .env   # LLM_API_KEY, SMTP, NOTIFIER_SECRET
-./infra/aws/install_ec2.sh
+cd Job_search   # lokalna kopia repo
+
+export AWS_REGION=eu-central-1
+export EC2_INSTANCE_ID=i-0123456789abcdef0   # Twoje Instance ID
+export RUN_AS_USER=ubuntu
+export PIPELINE_SCRIPT=/home/ubuntu/Job_search/infra/aws/run_daily_pipeline.sh
+export SCHEDULE_HOUR=8                        # 8:00 rano
+export SCHEDULE_TIMEZONE=Europe/Warsaw
+
+chmod +x infra/aws/setup_eventbridge.sh
+./infra/aws/setup_eventbridge.sh
 ```
+
+Skrypt tworzy:
+- Lambda `job-search-daily-trigger`
+- EventBridge Scheduler `job-search-daily` — **cron raz dziennie**
+- role IAM (Lambda → SSM, Scheduler → Lambda)
+
+### Test harmonogramu (bez czekania do 8:00)
+
+```bash
+aws lambda invoke \
+  --function-name job-search-daily-trigger \
+  --region eu-central-1 \
+  /tmp/job-search-out.json
+
+cat /tmp/job-search-out.json
+```
+
+Na EC2 po ~1–2 min:
+
+```bash
+tail -100 ~/Job_search/logs/latest.log
+```
+
+### Podgląd w konsoli AWS
+
+- **EventBridge** → **Schedules** → `job-search-daily`
+- **Lambda** → `job-search-daily-trigger` → Monitor → Logs
+- **Systems Manager** → **Run Command** → historia
 
 ---
 
-## Krok 6 — Konfiguracja `.env` na EC2
-
-Wymagane minimum:
+## Krok 5 — Konfiguracja `.env` na EC2
 
 ```env
-LLM_API_KEY=AIza...
 NOTIFIER_ENABLED=true
-NOTIFIER_SECRET=losowy-sekret-16-znakow
+NOTIFIER_MAX_OFFERS=10
+NOTIFIER_SECRET=losowy-sekret
+
+LLM_API_KEY=AIza...
+LLM_FALLBACK_MODELS=gemini-2.0-flash,gemini-1.5-flash
+
+JOB_SEARCH_SECTOR=data
+JOB_SEARCH_SOURCE=justjoin
+JOB_SEARCH_MAX_OFFERS=30
+JOB_SEARCH_MATCH_LIMIT=20
+
 SMTP_HOST=...
 SMTP_FROM=...
 SMTP_TO=...
 ```
 
-Parametry dziennego runu (opcjonalne):
-
-```env
-JOB_SEARCH_SECTOR=data
-JOB_SEARCH_SOURCE=justjoin
-JOB_SEARCH_MAX_OFFERS=30
-JOB_SEARCH_MATCH_LIMIT=20
-```
-
 ---
 
-## Krok 7 — Cron: RAZ NA DZIEN (najważniejsze)
+## Krok 6 — Amazon SES (email, free tier)
 
-```bash
-crontab -e
-```
-
-Wklej z `infra/aws/crontab.example` (popraw ścieżkę):
-
-```cron
-CRON_TZ=Europe/Warsaw
-0 8 * * * /home/ubuntu/Job_search/infra/aws/run_daily_pipeline.sh
-```
-
-To uruchamia **całość raz dziennie o 8:00** czasu polskiego.
-
-Sprawdź:
-
-```bash
-crontab -l
-```
-
-**Nie dodawaj** drugiego wpisu ani częstszego harmonogramu — jeden wpis = jeden mail/dzień (przy `NOTIFIER_ENABLED=true`).
-
----
-
-## Krok 8 — Test ręczny (przed cron)
-
-```bash
-cd ~/Job_search
-./infra/aws/run_daily_pipeline.sh
-tail -100 logs/latest.log
-```
-
-Oczekiwany koniec logu:
-
-```
-[pipeline] Email wysłany: N ofert → twoj@email.com
-[pipeline] Krok 3/3: Gotowe.
-```
-
----
-
-## Krok 9 — Amazon SES (email produkcyjny, free tier)
-
-1. AWS Console → **SES** → region np. **eu-central-1** (Frankfurt)
-2. **Verified identities** → zweryfikuj domenę lub adres email (na start: swój Gmail jako `SMTP_TO` + zweryfikowany `SMTP_FROM`)
-3. **SMTP settings** → **Create SMTP credentials**
-4. W `.env`:
+1. **SES** → region `eu-central-1`
+2. Zweryfikuj email nadawcy i odbiorcy (sandbox)
+3. **SMTP credentials** → wklej do `.env` na EC2
 
 ```env
 SMTP_HOST=email-smtp.eu-central-1.amazonaws.com
 SMTP_PORT=587
-SMTP_USER=<SMTP username z SES>
-SMTP_PASSWORD=<SMTP password z SES>
-SMTP_FROM=zweryfikowany@email.pl
-SMTP_TO=twoj-email@gmail.com
+SMTP_USER=...
+SMTP_PASSWORD=...
 ```
-
-Sandbox SES: możesz wysyłać tylko na zweryfikowane adresy — na start wystarczy.
 
 ---
 
-## Krok 10 — CloudWatch Logs (opcjonalnie)
+## Krok 7 — CloudWatch (opcjonalnie)
 
-1. EC2 → **CloudWatch agent** — zainstaluj na instancji
-2. Skonfiguruj zbieranie pliku:
-
-```
-/home/ubuntu/Job_search/logs/latest.log
-```
-
-3. W konsoli CloudWatch → **Log groups** → podgląd błędów pipeline
-
-Free tier: 5 GB ingestion / miesiąc — wystarczy na logi dzienne.
+- Logi Lambda: automatycznie w `/aws/lambda/job-search-daily-trigger`
+- Logi pipeline: `~/Job_search/logs/latest.log` na EC2
+- Możesz dołożyć CloudWatch Agent na EC2 (free tier 5 GB)
 
 ---
 
-## Krok 11 — Aktualizacja kodu na serwerze
+## Alternatywa: cron (bez EventBridge)
+
+Tylko jeśli nie chcesz Lambda/SSM:
 
 ```bash
-cd ~/Job_search
-git pull origin main
-source .venv/bin/activate
-pip install -e .
-python -m job_search.cli migrate
+crontab -e
+# wklej infra/aws/crontab.example
 ```
-
-Cron zostaje bez zmian.
 
 ---
 
@@ -214,11 +224,11 @@ Cron zostaje bez zmian.
 
 | Problem | Rozwiązanie |
 |---------|-------------|
-| Cron nie działa | `grep CRON /var/log/syslog` (Ubuntu), sprawdź ścieżkę w crontab |
-| Brak maila | `NOTIFIER_ENABLED=true`, sprawdź SMTP w `.env`, `tail logs/latest.log` |
-| 503 Gemini | `LLM_FALLBACK_MODELS` w `.env` |
-| Permission denied | `chmod +x infra/aws/run_daily_pipeline.sh` |
-| Dwa maile dziennie | Usuń duplikaty w `crontab -l` — zostaw **jeden** wpis |
+| SSM Offline | IAM role `AmazonSSMManagedInstanceCore` na EC2, SSM agent |
+| Lambda błąd AccessDenied | Ponów `setup_eventbridge.sh`, sprawdź role IAM |
+| Pipeline nie startuje | `aws ssm list-command-invocations --instance-id i-...` |
+| Brak maila | `NOTIFIER_ENABLED=true`, SMTP w `.env` |
+| Dwa maile/dzień | Jeden harmonogram EventBridge; nie używaj cron + EventBridge razem |
 
 ---
 
@@ -226,17 +236,19 @@ Cron zostaje bez zmian.
 
 | Plik | Opis |
 |------|------|
-| `infra/aws/run_daily_pipeline.sh` | Wrapper: migrate + `cli run` + logi |
-| `infra/aws/install_ec2.sh` | venv, pip, init-db, migrate |
-| `infra/aws/crontab.example` | **1× dziennie** o 8:00 |
-| `infra/aws/env.ec2.example` | Szablon `.env` pod EC2 |
+| `infra/aws/setup_eventbridge.sh` | **Główny setup** harmonogramu |
+| `infra/aws/lambda/trigger_daily_pipeline.py` | Lambda → SSM |
+| `infra/aws/run_daily_pipeline.sh` | Pipeline na EC2 |
+| `infra/aws/install_ec2.sh` | Instalacja na EC2 |
+| `infra/aws/env.ec2.example` | Szablon `.env` |
+| `infra/aws/crontab.example` | Zapasowy cron |
 
 ---
 
 ## Definition of Done
 
-- [x] Skrypty instalacji i dziennego runu
-- [x] Crontab example — jeden run na dobę
+- [x] EventBridge Scheduler — raz dziennie
+- [x] Lambda + SSM (free tier)
+- [x] Skrypt `setup_eventbridge.sh`
 - [x] Dokumentacja krok po kroku
-- [x] SES / CloudWatch opisane
-- [ ] Terraform/CDK — poza zakresem MVP
+- [x] Cron jako alternatywa

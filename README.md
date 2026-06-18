@@ -300,15 +300,17 @@ python -m job_search.cli notify send --profile config/profiles/default.json
 python -m job_search.cli notify mark-applied --profile config/profiles/default.json --offer-id 123
 ```
 
-## AWS (EC2 + cron raz dziennie)
+## AWS (EventBridge — raz dziennie, free tier)
 
-Cały pipeline na serwerze uruchamiany **1× na dobę** przez cron (nie częściej — limit API i jeden digest mailowy). Instrukcja krok po kroku: [docs/agents/aws-deployment-agent.md](docs/agents/aws-deployment-agent.md).
+Cały pipeline uruchamiany **1× na dobę** przez **EventBridge Scheduler** → Lambda → SSM → EC2. Koszt w free tier: ~0 zł.
 
 ```bash
-# Na EC2 po instalacji:
-crontab -e   # wklej infra/aws/crontab.example
-./infra/aws/run_daily_pipeline.sh
+# Na laptopie po instalacji na EC2:
+export EC2_INSTANCE_ID=i-...
+./infra/aws/setup_eventbridge.sh
 ```
+
+Instrukcja: [docs/agents/aws-deployment-agent.md](docs/agents/aws-deployment-agent.md)
 
 ## Windows Task Scheduler
 
