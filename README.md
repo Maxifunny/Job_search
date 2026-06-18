@@ -300,6 +300,18 @@ python -m job_search.cli notify send --profile config/profiles/default.json
 python -m job_search.cli notify mark-applied --profile config/profiles/default.json --offer-id 123
 ```
 
+## AWS (EventBridge — raz dziennie, free tier)
+
+Cały pipeline uruchamiany **1× na dobę** przez **EventBridge Scheduler** → Lambda → SSM → EC2. Koszt w free tier: ~0 zł.
+
+```bash
+# Na laptopie po instalacji na EC2:
+export EC2_INSTANCE_ID=i-...
+./infra/aws/setup_eventbridge.sh
+```
+
+Instrukcja: [docs/agents/aws-deployment-agent.md](docs/agents/aws-deployment-agent.md)
+
 ## Windows Task Scheduler
 
 Automatyczne codzienne uruchamianie pipeline’u na Windows (bez ręcznych komend). Szczegóły: [docs/agents/scheduler-agent.md](docs/agents/scheduler-agent.md).

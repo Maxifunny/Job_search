@@ -11,7 +11,7 @@ Wysyłka **emailowych podsumowań** z maksymalnie **10 najnowszymi** rekomendacj
 
 Notifier jest **wbudowany** w pipeline (`NOTIFIER_ENABLED=true`) i działa też **osobno** przez CLI.
 
-> Instrukcja wdrożenia AWS (EC2, SES, CloudWatch) — osobny agent w następnym PR.
+> Instrukcja wdrożenia AWS (EC2, cron raz dziennie, SES): [aws-deployment-agent.md](aws-deployment-agent.md)
 
 ---
 
@@ -146,8 +146,4 @@ python -m job_search.cli migrate
 
 ## Następny agent: AWS
 
-Zakres osobnego PR:
-- EC2 t3.micro + cron
-- Amazon SES (SMTP)
-- CloudWatch Logs
-- opcjonalnie API Gateway + Lambda dla `NOTIFIER_PUBLIC_BASE_URL/notify/confirm`
+Zrealizowane w [docs/agents/aws-deployment-agent.md](aws-deployment-agent.md) — EC2 + **cron raz dziennie** (cały pipeline).

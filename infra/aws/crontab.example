@@ -1,0 +1,19 @@
+# Job Search — harmonogram cron (ALTERNATYWA — preferuj EventBridge)
+#
+# Zalecane: infra/aws/setup_eventbridge.sh (EventBridge Scheduler, free tier)
+#
+# Jeśli jednak wolisz cron na EC2:
+#   crontab -e
+#   Wklej poniższe linie (dostosuj ścieżkę użytkownika i repo).
+#
+# Cron uruchamia CAŁY pipeline (scrape + match + email jeśli NOTIFIER_ENABLED=true).
+# Nie uruchamiaj częściej — limit API LLM i sensowny dzienny digest mailowy.
+
+# Strefa czasowa dla harmonogramu (Polska)
+CRON_TZ=Europe/Warsaw
+
+# Codziennie o 8:00 — jeden run na dobę
+0 8 * * * /home/ubuntu/Job_search/infra/aws/run_daily_pipeline.sh
+
+# Alternatywa: 7:30 w dni robocze (pon–pt)
+# 30 7 * * 1-5 /home/ubuntu/Job_search/infra/aws/run_daily_pipeline.sh
