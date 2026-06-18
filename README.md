@@ -290,6 +290,16 @@ Przykładowy output:
 ✅ ML Engineer @ NeoML — https://justjoin.it/offers/...
 ```
 
+## Email Notifier
+
+Wysyłka maila z maks. 10 najnowszymi rekomendacjami oraz potwierdzenie „zaaplikowałem” (oferta nie wraca w kolejnych mailach). Szczegóły: [docs/agents/notifier-agent.md](docs/agents/notifier-agent.md).
+
+```powershell
+# .env: NOTIFIER_ENABLED=true + SMTP_*
+python -m job_search.cli notify send --profile config/profiles/default.json
+python -m job_search.cli notify mark-applied --profile config/profiles/default.json --offer-id 123
+```
+
 ## Windows Task Scheduler
 
 Automatyczne codzienne uruchamianie pipeline’u na Windows (bez ręcznych komend). Szczegóły: [docs/agents/scheduler-agent.md](docs/agents/scheduler-agent.md).

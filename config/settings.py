@@ -92,6 +92,19 @@ class Settings(BaseSettings):
         alias="SCRAPER_MAX_OFFERS_PER_QUERY",
     )
 
+    notifier_enabled: bool = Field(default=False, alias="NOTIFIER_ENABLED")
+    notifier_max_offers: int = Field(default=10, alias="NOTIFIER_MAX_OFFERS")
+    notifier_secret: str = Field(default="", alias="NOTIFIER_SECRET")
+    notifier_public_base_url: str = Field(default="", alias="NOTIFIER_PUBLIC_BASE_URL")
+
+    smtp_host: str = Field(default="", alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, alias="SMTP_PORT")
+    smtp_user: str = Field(default="", alias="SMTP_USER")
+    smtp_password: str = Field(default="", alias="SMTP_PASSWORD")
+    smtp_from: str = Field(default="", alias="SMTP_FROM")
+    smtp_to: str = Field(default="", alias="SMTP_TO")
+    smtp_use_tls: bool = Field(default=True, alias="SMTP_USE_TLS")
+
     @field_validator("llm_fallback_models", "embedding_fallback_models", mode="before")
     @classmethod
     def _parse_model_list(cls, value: object) -> list[str]:

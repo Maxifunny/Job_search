@@ -12,6 +12,7 @@ from job_search.matching.service import (
 )
 from job_search.memory.database import get_session, init_database, migrate_database
 from job_search.memory.repositories import JobOfferRepository
+from job_search.notifications import NotificationService
 from job_search.orchestrator import JobSearchPipeline
 from job_search.profiles import (
     load_template_dict,
@@ -240,6 +241,54 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override output filename (default: <profile.name>.json)",
     )
 
+    notify = sub.add_parser("notify", help="Email notifications for recommendations")
+    notify_sub = notify.add_subparsers(dest="notify_command")
+
+    notify_send = notify_sub.add_parser(
+        "send",
+        help="Send email digest with up to N newest recommendations",
+    )
+    notify_send.add_argument(
+        "--profile",
+        default="config/profiles/default.json",
+        help="Path to candidate profile JSON (default: config/profiles/default.json)",
+    )
+    notify_send.add_argument(
+        "--limit",
+        type=int,
+        help="Max offers in email (default: NOTIFIER_MAX_OFFERS from .env)",
+    )
+    notify_send.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Build digest without sending SMTP",
+    )
+
+    notify_confirm = notify_sub.add_parser(
+        "confirm",
+        help="Confirm application from signed token (from email)",
+    )
+    notify_confirm.add_argument(
+        "token",
+        help="Signed token from notification email",
+    )
+
+    notify_applied = notify_sub.add_parser(
+        "mark-applied",
+        help="Mark offer as applied so it is not emailed again",
+    )
+    notify_applied.add_argument(
+        "--profile",
+        default="config/profiles/default.json",
+        help="Path to candidate profile JSON (default: config/profiles/default.json)",
+    )
+    notify_applied.add_argument(
+        "--offer-id",
+        type=int,
+        required=True,
+        help="Internal job_offer id from database",
+    )
+
     return parser
 
 
@@ -399,6 +448,51 @@ def main() -> None:
         else:
             print("Użycie: profile template | profile validate <path> | profile save <path>")
             print(f"Szablon: {template_path()}")
+    elif args.command == "notify":
+        service = NotificationService()
+        if args.notify_command == "send":
+            profile = load_profile(Path(args.profile))
+            try:
+                result = service.send_email_digest(
+                    profile.name,
+                    limit=args.limit,
+                    dry_run=args.dry_run,
+                )
+            except Exception as exc:
+                print(f"[notify] Błąd: {exc}")
+                sys.exit(1)
+            if args.dry_run:
+                print(
+                    f"[notify] Dry-run: przygotowano {result.skipped} ofert "
+                    f"(temat: {result.subject})"
+                )
+            elif result.sent:
+                print(
+                    f"[notify] Wysłano {result.sent} ofert na "
+                    f"{', '.join(result.recipients)}"
+                )
+            else:
+                print("[notify] Brak nowych ofert do wysłania.")
+        elif args.notify_command == "confirm":
+            try:
+                message = service.confirm_applied_from_token(args.token)
+            except Exception as exc:
+                print(f"[notify] Błąd: {exc}")
+                sys.exit(1)
+            print(f"[notify] {message}")
+        elif args.notify_command == "mark-applied":
+            profile = load_profile(Path(args.profile))
+            try:
+                message = service.mark_applied(
+                    candidate_name=profile.name,
+                    job_offer_id=args.offer_id,
+                )
+            except Exception as exc:
+                print(f"[notify] Błąd: {exc}")
+                sys.exit(1)
+            print(f"[notify] {message}")
+        else:
+            print("Użycie: notify send | notify confirm <token> | notify mark-applied")
     elif args.command == "schedule":
         profile = args.profile.replace("/", "\\")
         sync_flag = " -SyncVectors" if args.sync_vectors else ""

@@ -80,6 +80,9 @@ class JobOffer(Base):
     hidden_for_candidates: Mapped[list["HiddenOffer"]] = relationship(
         back_populates="job_offer", cascade="all, delete-orphan"
     )
+    notification_logs: Mapped[list["NotificationLog"]] = relationship(
+        back_populates="job_offer", cascade="all, delete-orphan"
+    )
 
 
 class ScrapeRun(Base):
@@ -159,6 +162,34 @@ class Recommendation(Base):
     user_action: Mapped[str | None] = mapped_column(String(64))
 
     job_offer: Mapped[JobOffer] = relationship(back_populates="recommendations")
+
+
+class NotificationLog(Base):
+    """Tracks outbound notifications so offers are not emailed repeatedly."""
+
+    __tablename__ = "notification_log"
+    __table_args__ = (
+        UniqueConstraint(
+            "job_offer_id",
+            "candidate_name",
+            "channel",
+            name="uq_notification_offer_candidate_channel",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_offer_id: Mapped[int] = mapped_column(
+        ForeignKey("job_offers.id", ondelete="CASCADE"), nullable=False
+    )
+    candidate_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    channel: Mapped[str] = mapped_column(String(64), default="email", nullable=False)
+    recipient: Mapped[str] = mapped_column(String(255), nullable=False)
+    subject: Mapped[str | None] = mapped_column(String(255))
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    job_offer: Mapped[JobOffer] = relationship(back_populates="notification_logs")
 
 
 class HiddenOffer(Base):
