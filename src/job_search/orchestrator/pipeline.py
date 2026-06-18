@@ -137,6 +137,24 @@ class JobSearchPipeline:
             f"skipped={result.skipped}"
         )
 
-        # --- Krok 4: Report ----------------------------------------------
+        # --- Krok 4: Notify (optional email) --------------------------------
+        if get_settings().notifier_enabled:
+            print("[pipeline] Krok 3/3: Wysyłanie powiadomienia email...")
+            try:
+                from job_search.notifications import NotificationService
+
+                notify_result = NotificationService().send_email_digest(profile.name)
+                if notify_result.sent:
+                    print(
+                        f"[pipeline] Email wysłany: {notify_result.sent} ofert "
+                        f"→ {', '.join(notify_result.recipients)}"
+                    )
+                else:
+                    print("[pipeline] Brak nowych ofert do wysłania mailem.")
+            except Exception as exc:
+                message = f"Notifier failed: {exc}"
+                print(f"[pipeline] {message}")
+                result.errors.append(message)
+
         print("[pipeline] Krok 3/3: Gotowe.")
         return result
