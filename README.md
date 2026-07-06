@@ -300,17 +300,18 @@ python -m job_search.cli notify send --profile config/profiles/default.json
 python -m job_search.cli notify mark-applied --profile config/profiles/default.json --offer-id 123
 ```
 
-## AWS (EventBridge — raz dziennie, free tier)
+## Azure (VM + Automation — raz dziennie, free tier)
 
-Cały pipeline uruchamiany **1× na dobę** przez **EventBridge Scheduler** → Lambda → SSM → EC2. Koszt w free tier: ~0 zł.
+Cały pipeline uruchamiany **1× na dobę** przez **Azure Automation** (runbook + harmonogram). Prostsze niż AWS.
 
-```bash
-# Na laptopie po instalacji na EC2:
-export EC2_INSTANCE_ID=i-...
-./infra/aws/setup_eventbridge.sh
+```powershell
+Connect-AzAccount
+./infra/azure/Setup-DailySchedule.ps1 -ResourceGroupName job-search-rg -VMName job-search-vm
 ```
 
-Instrukcja: [docs/agents/aws-deployment-agent.md](docs/agents/aws-deployment-agent.md)
+Instrukcja: [docs/agents/azure-deployment-agent.md](docs/agents/azure-deployment-agent.md)
+
+> AWS (EventBridge) — archiwum, niezalecane: [docs/agents/aws-deployment-agent.md](docs/agents/aws-deployment-agent.md)
 
 ## Windows Task Scheduler
 

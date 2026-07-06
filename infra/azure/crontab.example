@@ -1,0 +1,10 @@
+# Job Search — harmonogram cron (ALTERNATYWA na Azure VM)
+#
+# Zalecane: infra/azure/Setup-DailySchedule.ps1 (Azure Automation, free tier)
+# lub Logic Apps — docs/agents/azure-deployment-agent.md
+#
+# Prosty cron na VM (jeśli nie chcesz Automation):
+#   crontab -e
+
+CRON_TZ=Europe/Warsaw
+0 8 * * * /home/azureuser/Job_search/infra/azure/run_daily_pipeline.sh

@@ -1,7 +1,9 @@
-# AWS Deployment Agent — EventBridge + EC2 (raz dziennie, free tier)
+# AWS Deployment Agent — EC2 + EventBridge (ARCHIWUM)
 
-**Branch:** `cursor/aws-daily-cron-503f`  
-**Pliki:** `infra/aws/*`, `docs/agents/aws-deployment-agent.md`
+> **Niezalecane.** Projekt przeniósł wdrożenie na **Azure**.  
+> Aktualna instrukcja: [azure-deployment-agent.md](azure-deployment-agent.md)
+
+**Branch:** `cursor/aws-daily-cron-503f` (historyczny)
 
 ---
 
