@@ -11,7 +11,7 @@ Wysyłka **emailowych podsumowań** z maksymalnie **10 najnowszymi** rekomendacj
 
 Notifier jest **wbudowany** w pipeline (`NOTIFIER_ENABLED=true`) i działa też **osobno** przez CLI.
 
-> Instrukcja wdrożenia AWS (EC2, cron raz dziennie, SES): [aws-deployment-agent.md](aws-deployment-agent.md)
+> Instrukcja wdrożenia **Azure** (VM + Automation, raz dziennie): [azure-deployment-agent.md](azure-deployment-agent.md)
 
 ---
 
@@ -144,6 +144,7 @@ python -m job_search.cli migrate
 
 ---
 
-## Następny agent: AWS
+## Wdrożenie w chmurze
 
-Zrealizowane w [docs/agents/aws-deployment-agent.md](aws-deployment-agent.md) — EC2 + **cron raz dziennie** (cały pipeline).
+Aktualna platforma: **Azure** — [azure-deployment-agent.md](azure-deployment-agent.md)  
+(AWS — archiwum: [aws-deployment-agent.md](aws-deployment-agent.md))
