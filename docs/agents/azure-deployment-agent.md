@@ -1,7 +1,8 @@
 # Azure Deployment Agent — VM + Automation (raz dziennie, free tier)
 
 **Branch:** `cursor/azure-daily-schedule-503f`  
-**Pliki:** `infra/azure/*`, `docs/agents/azure-deployment-agent.md`
+**Pliki:** `infra/azure/*`, `docs/agents/azure-deployment-agent.md`  
+**Prompt konwersacyjny (setup krok po kroku):** [azure-vm-setup-agent.md](azure-vm-setup-agent.md)
 
 > **Decyzja projektu:** wdrożenie produkcyjne na **Azure** (nie AWS).  
 > AWS: [aws-deployment-agent.md](aws-deployment-agent.md) — archiwum / niezalecane.
