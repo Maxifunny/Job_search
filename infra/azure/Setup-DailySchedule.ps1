@@ -180,16 +180,19 @@ Register-AzAutomationScheduledRunbook `
     -RunbookName $runbookName `
     -ScheduleName $scheduleName `
     -Parameters @{
-        ResourceGroupName = $ResourceGroupName
-        VMName            = $VMName
-        RunUser           = $RunUser
-        ScriptPath        = $ScriptPath
+        ResourceGroupName    = $ResourceGroupName
+        VMName               = $VMName
+        RunUser              = $RunUser
+        ScriptPath           = $ScriptPath
+        StopVMAfterRun       = $true
+        StartVMIfStopped     = $true
+        AgentReadyWaitSeconds = 90
     }
 
 Write-Step ""
 Write-Step "=== Gotowe ==="
 Write-Step "Harmonogram: $scheduleName — raz dziennie o ${ScheduleHour}:00"
-Write-Step "Runbook: $runbookName → Run Command na VM $VMName"
+Write-Step "Runbook: $runbookName → start VM → pipeline → stop VM (deallocate)"
 Write-Step ""
 Write-Step "Test ręczny runbook (portal Azure → Automation → Runbooks → Start):"
 Write-Step "  Lub na VM: ./infra/azure/run_daily_pipeline.sh"
