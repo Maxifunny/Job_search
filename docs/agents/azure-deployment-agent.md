@@ -23,16 +23,36 @@ Azure Automation (harmonogram 8:00)
 
 ---
 
-## Koszty (free tier — ~0 zł przez 12 mies.)
+## Koszty (free tier / Azure for Students)
 
-| Usługa | Free tier |
-|--------|-----------|
-| **VM B1s** (Linux) | 750 h/mies. przez 12 mies. |
+| Usługa | Free tier / kredyty |
+|--------|---------------------|
+| **VM B1s** (Linux) | 750 h/mies. przez 12 mies. (free account) |
+| **Azure for Students** | **100 USD** kredytu — bez limitu czasu, aż do wyczerpania |
 | **Azure Automation** | 500 min runbooków/mies. |
 | **Run Command** | wliczone w VM |
 | **Gmail SMTP** | darmowe (testy) |
 
-> Po 12 mies.: VM B1s ~10 EUR/mies. — nadal najtańsza opcja.
+### Najtańszy wariant: VM włączana raz dziennie (zalecane przy kredytach)
+
+Runbook `Invoke-DailyPipeline.ps1` domyślnie:
+
+1. **Start** VM (jeśli wyłączona / deallocate)
+2. Czeka na agenta VM (~90 s)
+3. **Run Command** → `run_daily_pipeline.sh`
+4. **Stop** VM (deallocate — **nie płacisz za compute** między uruchomieniami)
+
+| Scenariusz | Szacunek B1s West Europe |
+|------------|--------------------------|
+| VM **24/7** | ~7–8 USD/mies. (+ dysk ~2 USD) |
+| VM **~1 h/dzień** | ~0,30 USD/mies. compute (+ dysk ~2 USD) |
+| **100 USD studenckie** | Wystarczy na **lata** przy trybie dzienny |
+
+> Po wyczerpaniu kredytów / free tier: VM B1s 24/7 ~10 EUR/mies. — tryb start/stop nadal obniża koszt ~20×.
+
+**Oszczędności dodatkowe:**
+- Po setupie SSH możesz usunąć publiczny IP (pipeline działa przez Automation bez SSH).
+- Dysk OS (~30 GB) jest płatny nawet przy wyłączonej VM — to normalne (~1–2 USD/mies.).
 
 ---
 
@@ -52,10 +72,12 @@ Azure Automation (harmonogram 8:00)
 ```mermaid
 flowchart LR
     A[Automation Schedule 08:00] --> R[Runbook PowerShell]
-    R --> RC[VM Run Command]
+    R --> Start[Start VM]
+    Start --> RC[VM Run Command]
     RC --> VM[Azure VM Ubuntu]
     VM --> S[run_daily_pipeline.sh]
     S --> P[cli run + email]
+    P --> Stop[Stop VM deallocate]
 ```
 
 ---

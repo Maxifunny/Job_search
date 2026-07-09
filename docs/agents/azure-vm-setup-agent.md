@@ -32,7 +32,7 @@ Azure VM (Ubuntu 22.04, B1s, West Europe)
 └── infra/azure/run_daily_pipeline.sh
 ```
 
-Harmonogram (po udanym teście): Azure Automation → runbook → Run Command na VM → `run_daily_pipeline.sh` **LUB** prostszy cron na VM (raz dziennie 8:00).
+Harmonogram (po udanym teście): Azure Automation → runbook → **start VM** → Run Command → `run_daily_pipeline.sh` → **stop VM (deallocate)**. Alternatywa: cron na VM — ale wtedy VM musi być włączona 24/7 (drożej).
 
 ## Checklist setupu (prowadź użytkownika w tej kolejności)
 
@@ -123,7 +123,12 @@ Powiedz mu żeby w `.env` na VM uzupełnił tylko te pola:
 → Tak — prostsze na start. Automation dodasz później.
 
 **„Ile to kosztuje?”**  
-→ Free tier: VM B1s 12 mies. za ~0 zł, Automation 500 min/mies. Po roku VM ~10 EUR/mies.
+→ **Azure for Students (100 USD):** przy VM B1s w trybie „raz dziennie” (start → pipeline → stop) zużywasz ~2–3 USD/mies. (głównie dysk). Kredyt wystarczy na **lata**.  
+→ Free tier: VM B1s 12 mies. za ~0 zł (750 h/mies.), Automation 500 min/mies.  
+→ VM **24/7** zużywa ~7–8 USD/mies. — niepotrzebne, jeśli pipeline raz dziennie.
+
+**„Czy VM musi być włączona cały czas?”**  
+→ **Nie.** Runbook `Invoke-DailyPipeline.ps1` sam włącza VM, odpala pipeline i wyłącza (deallocate). Po setupie możesz ręcznie wyłączyć VM w portalu — harmonogram ją włączy o 8:00.
 
 ## Styl odpowiedzi
 
