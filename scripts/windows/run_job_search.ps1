@@ -1,5 +1,5 @@
 # Uruchamia pipeline job search z logowaniem do logs/.
-# Użycie: .\scripts\windows\run_job_search.ps1 -Sector data -Profile config\profiles\default.json
+# Uzycie: .\scripts\windows\run_job_search.ps1 -Sector data -Profile config\profiles\default.json
 
 [CmdletBinding()]
 param(
@@ -19,7 +19,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Katalog repozytorium (scripts/windows -> dwa poziomy w górę)
+# Katalog repozytorium (scripts/windows -> dwa poziomy w gore)
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 Set-Location $RepoRoot
 
@@ -38,22 +38,21 @@ function Write-Log {
     Write-Host $Line
 }
 
-Write-Log "Start job search — repo: $RepoRoot"
+Write-Log "Start job search - repo: $RepoRoot"
 Write-Log "Parametry: Sector=$Sector Profile=$Profile Source=$Source MaxOffers=$MaxOffers MatchLimit=$MatchLimit SyncVectors=$($SyncVectors.IsPresent)"
 
-# Wirtualne środowisko Python
+# Wirtualne srodowisko Python
 $VenvActivate = Join-Path $RepoRoot ".venv\Scripts\Activate.ps1"
 if (-not (Test-Path $VenvActivate)) {
-    $Msg = @"
-BŁĄD: Nie znaleziono środowiska wirtualnego Python.
-Oczekiwana ścieżka: $VenvActivate
-
-Utwórz venv w katalogu repozytorium:
-  cd $RepoRoot
-  python -m venv .venv
-  .\.venv\Scripts\Activate.ps1
-  pip install -r requirements.txt
-"@
+    $Msg = (
+        "BLAD: Nie znaleziono srodowiska wirtualnego Python.`n" +
+        "Oczekiwana sciezka: $VenvActivate`n`n" +
+        "Utworz venv w katalogu repozytorium:`n" +
+        "  cd $RepoRoot`n" +
+        "  python -m venv .venv`n" +
+        "  .\.venv\Scripts\Activate.ps1`n" +
+        "  pip install -r requirements.txt"
+    )
     Write-Log $Msg
     Write-Host $Msg -ForegroundColor Red
     exit 1
@@ -85,11 +84,11 @@ try {
     $Output | Tee-Object -FilePath $LogFile -Append
 }
 catch {
-    Write-Log "BŁĄD wykonania: $_"
+    Write-Log "BLAD wykonania: $_"
     Write-Host $_ -ForegroundColor Red
     exit 1
 }
 
-Write-Log "Zakończono z kodem wyjścia: $ExitCode"
+Write-Log "Zakonczono z kodem wyjscia: $ExitCode"
 Write-Host "Log zapisany: $LogFile" -ForegroundColor Cyan
 exit $ExitCode
