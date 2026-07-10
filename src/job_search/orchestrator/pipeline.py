@@ -146,8 +146,8 @@ class JobSearchPipeline:
                 notify_result = NotificationService().send_email_digest(profile.name)
                 if notify_result.sent:
                     print(
-                        f"[pipeline] Email wysłany: {notify_result.sent} ofert "
-                        f"→ {', '.join(notify_result.recipients)}"
+                        f"[pipeline] Email wyslany: {notify_result.sent} ofert "
+                        f"-> {', '.join(notify_result.recipients)}"
                     )
                 else:
                     print("[pipeline] Brak nowych ofert do wysłania mailem.")

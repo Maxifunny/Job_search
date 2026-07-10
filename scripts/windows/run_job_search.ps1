@@ -77,6 +77,10 @@ if (-not $SyncVectors) {
 
 Write-Log "Uruchamianie: python $($CliArgs -join ' ')"
 
+# Windows PowerShell 5.1: UTF-8 stdout (polskie znaki w mailu / logu)
+$env:PYTHONUTF8 = "1"
+$env:PYTHONIOENCODING = "utf-8"
+
 try {
     $Output = & python @CliArgs 2>&1
     $ExitCode = $LASTEXITCODE
