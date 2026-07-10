@@ -17,13 +17,16 @@ def _configure_sqlite(engine: Engine) -> None:
     def set_sqlite_pragma(dbapi_connection, _connection_record) -> None:
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA journal_mode=WAL")
         cursor.close()
 
 
 def create_db_engine(database_url: str | None = None) -> Engine:
     """Create SQLAlchemy engine with sensible defaults for SQLite/PostgreSQL."""
     url = database_url or get_settings().database_url
-    connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
+    connect_args: dict = {}
+    if url.startswith("sqlite"):
+        connect_args = {"check_same_thread": False, "timeout": 30}
     engine = create_engine(url, echo=False, future=True, connect_args=connect_args)
     if url.startswith("sqlite"):
         _configure_sqlite(engine)
